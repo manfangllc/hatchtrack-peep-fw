@@ -3,8 +3,7 @@
 #include "nvs_flash.h"
 #include "system.h"
 #include "ble.h"
-#include "sensor.h"
-#include "deep_sleep.h"
+//#include "sensor.h"
 
 /***** Defines *****/
 

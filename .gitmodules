@@ -1,3 +1,9 @@
 [submodule "lib/esp-idf"]
 	path = lib/esp-idf
 	url = https://github.com/espressif/esp-idf.git
+[submodule "lib/hatchtrack-peep-protobuf"]
+	path = lib/hatchtrack-peep-protobuf
+	url = https://github.com/manfangllc/hatchtrack-peep-protobuf.git
+[submodule "lib/nanopb"]
+	path = lib/nanopb
+	url = https://github.com/nanopb/nanopb.git

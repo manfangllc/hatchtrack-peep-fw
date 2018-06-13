@@ -1,6 +1,11 @@
 #ifndef _BLE_H
 #define _BLE_H
 
+/***** Includes *****/
+
+#include <stdint.h>
+#include <stdbool.h>
+
 /***** Global Functions *****/
 
 extern void

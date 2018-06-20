@@ -1,7 +1,4 @@
 COMPONENT_PRIV_INCLUDEDIRS := \
-	. \
-	../protobuf
+	.
 
 CFLAGS += -DPB_BUFFER_ONLY -DPB_FIELD_32BIT=1
-
-

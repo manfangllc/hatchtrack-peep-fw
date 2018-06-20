@@ -36,5 +36,4 @@ cp $NANOPB_DIR/pb_common.* $OUT_DIR
 #+       uint8_t bytes[4096];
 #+} Command_FileContents_contents_t;
 #+
-
-patch -p 1 < patch/command.pb.h.patch
+#patch -p 1 < patch/command.pb.h.patch

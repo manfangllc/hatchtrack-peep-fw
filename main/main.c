@@ -123,7 +123,7 @@ app_main()
 	// TODO: Check mode, is hatch active?
 	// Testing BLE configuration first...
 
-	_state = PEEP_STATE_BLE_CONFIG;
+	_state = PEEP_STATE_UART_CONFIG;
 
 	while (1) {
 		switch(_state) {

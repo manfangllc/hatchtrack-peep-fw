@@ -29,7 +29,7 @@ _handle_client_command(void)
 {
 	bool r = true;
 
-	switch(_cmsg->command.type) {
+	switch (_cmsg->command.type) {
 	case (ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_DEVICE_CERT):
 		r = memory_set_item(
 			MEMORY_ITEM_DEV_CERT,
@@ -92,7 +92,39 @@ _handle_client_command(void)
 	}
 	_has_device_message = true;
 
-	return r;
+	// we have a valid message to send, set to true
+	return true;
+}
+
+static bool
+_handle_client_query(void)
+{
+	bool r = true;
+
+	switch (_cmsg->query.type) {
+	case (ClientQueryType_CLIENT_QUERY_ENCODING_VERSION):
+		_dmsg->query_result.version.major_version = MajorVersion_MAJOR_VERSION;
+		_dmsg->query_result.version.minor_version = MinorVersion_MINOR_VERSION;
+		_dmsg->query_result.version.patch_version = PatchVersion_PATCH_VERSION;
+		break;
+
+	case (ClientQueryType_CLIENT_QUERY_UNKNOWN):
+	default:
+		r = false;
+	}
+
+	*_dmsg = (DeviceMessage) DeviceMessage_init_default;
+	_dmsg->id = _cmsg->id;
+	_dmsg->type = DeviceMessageType_DEVICE_MESSAGE_QUERY_RESULT;
+	if (r) {
+		_dmsg->query_result.result = DeviceResult_DEVICE_RESULT_SUCCESS;
+	}
+	else {
+		_dmsg->query_result.result = DeviceResult_DEVICE_RESULT_ERROR;
+	}
+
+	// we have a valid message to send, set to true
+	return true;
 }
 
 /***** Global Functions *****/
@@ -146,6 +178,11 @@ message_client_write(uint8_t * message, uint32_t length)
 		case (ClientMessageType_CLIENT_MESSAGE_COMMAND):
 			r = _handle_client_command();
 			break;
+
+		case (ClientMessageType_CLIENT_MESSAGE_QUERY):
+			r = _handle_client_query();
+			break;
+
 		default:
 			r = false;
 		}

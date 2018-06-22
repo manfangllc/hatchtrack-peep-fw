@@ -29,4 +29,7 @@ memory_get_item(enum memory_item item, uint8_t * dst, uint32_t len);
 extern int32_t
 memory_set_item(enum memory_item item, uint8_t * src, uint32_t len);
 
+extern bool
+memory_delete_item(enum memory_item item);
+
 #endif

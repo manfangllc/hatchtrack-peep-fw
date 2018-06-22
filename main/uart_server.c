@@ -61,7 +61,6 @@ _uart_server_rx(void * arg)
 		} while (0 != len); 
 
 		if ((_server.rx_callback) && (0 != _server.rx_len)) {
-			// decode the message
 			_server.rx_callback(_server.rx_buf, _server.rx_len);
 			_server.rx_len = 0;
 		}
@@ -107,7 +106,7 @@ uart_server_enable(uint8_t * buf, uint32_t len)
 {
 	bool r = true;
 
-	if (!_server.task_handle) {
+	if (NULL != _server.task_handle) {
 		r = false;
 	}
 

@@ -119,3 +119,15 @@ memory_set_item(enum memory_item item, uint8_t * src, uint32_t len)
 
 	return s;
 }
+
+bool
+memory_delete_item(enum memory_item item)
+{
+	bool r = true;
+
+	if (0 != remove(_file_lut[item])) {
+		r = false;
+	}
+
+	return r;
+}

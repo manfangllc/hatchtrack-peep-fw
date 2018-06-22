@@ -11,6 +11,8 @@
 #include <termios.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <argp.h>
+#include <time.h>
 
 #include "pb_encode.h"
 #include "pb_decode.h"
@@ -18,19 +20,31 @@
 
 /***** Defines *****/
 
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+
+#define APP_VERSION_MAJOR 0
+#define APP_VERSION_MINOR 1
+#define APP_VERSION_PATCH 0
+#define APP_VERSION_STRING \
+	STR(APP_VERSION_MAJOR) "." STR(APP_VERSION_MINOR) "." STR(APP_VERSION_PATCH)
+
 #define PORT_NAME "/dev/ttyUSB0"
-#define BUF_LEN_MAX 10000
+#define BUF_LEN_MAX 100000
 
-#define str(x) #x
-#define xstr(x) str(x)
+/***** Global Data *****/
 
-//#define DEVICETYPE_STR(e) \
-	//((e) == DeviceMsgType_ACK_DMSG) ? "ACK" : \
-	//((e) == DeviceMsgType_COMMAND_RESULT_DMSG) ? "COMMAND" : \
-	//((e) == DeviceMsgType_INQUIRY_RESULT_DMSG) ? "INQUIRY" : \
-	//"UNKNOWN"
+const char *argp_program_version = "version " APP_VERSION_STRING;
+const char *argp_program_bug_address = "mreutman@widgt.ninja";
 
 /***** Local Data *****/
+
+static char _doc[] = "Configures Peep over UART connection.";
+static struct argp_option _options[] = {
+	{"wifi-ssid", 'w', "SSID", 0, "Wifi SSID to connect Peep to.", 0},
+	{"wifi-pass", 'p', "PASSWORD", 0, "Wifi password for connection.", 0},
+	{"encoding", 'e', 0, 0, "Obtain Protobuf encoding version.", 0}
+};
 
 static int _fd = -1;
 static uint8_t _buf[BUF_LEN_MAX];
@@ -107,7 +121,7 @@ _uart_write_cmsg(ClientMessage * cmsg)
 			r = false;
 		}
 		else {
-			printf("wrote %d bytes\n", len);
+			printf("wrote %d of %d bytes\n", len, _buf_len);
 		}
 	}
 
@@ -121,72 +135,115 @@ _uart_read_dmsg(DeviceMessage * dmsg)
 {
 	pb_istream_t stream;
 	bool r = true;
-	uint32_t n = 0;
+	bool done = false;
+	int len = 0;
+
 	_buf_len = 0;
 
+	while ((r) && (!done)) {
+		struct timeval t;
+		int retval = 0;
+		fd_set fds;
 
-	if (r) {
-		bool done = false;
-		int len = 0;
-		_buf_len = 0;
+		t.tv_sec = 1;
+		t.tv_usec = 0;
 
-		while (!done) {
-			struct timeval t;
-			int retval = 0;
-			fd_set fds;
+		FD_ZERO(&fds);
+		FD_SET(_fd, &fds);
 
-			t.tv_sec = 1;
-			t.tv_usec = 0;
-
-			FD_ZERO(&fds);
-			FD_SET(_fd, &fds);
-
-			retval = select(_fd + 1, &fds, NULL, NULL, &t);
-			if (-1 == retval) {
-				printf("error: %s\n", strerror(errno));
-			}
-			else if (retval) {
-				len = read(_fd, _buf + _buf_len, BUF_LEN_MAX - _buf_len);
-				if (len > 0) {
-					printf("read %d bytes\n", len);
-					_buf_len += len;
-					stream = pb_istream_from_buffer(_buf, _buf_len);
-					r = pb_decode_delimited(&stream, DeviceMessage_fields, dmsg);
-					if (r) {
-						done = true;
-					}
-					else {
-						uint32_t j = 0;
-						for (j = 0; j < _buf_len; j++) {
-							if (isprint(_buf[j])) {
-								printf("%c", _buf[j]);
-							}
+		retval = select(_fd + 1, &fds, NULL, NULL, &t);
+		if (-1 == retval) {
+			printf("error: %s\n", strerror(errno));
+		}
+		else if (retval) {
+			len = read(_fd, _buf + _buf_len, BUF_LEN_MAX - _buf_len);
+			if (len > 0) {
+				printf("read %d bytes\n", len);
+				_buf_len += len;
+				stream = pb_istream_from_buffer(_buf, _buf_len);
+				r = pb_decode_delimited(&stream, DeviceMessage_fields, dmsg);
+				if (r) {
+					done = true;
+				}
+				else {
+					uint32_t j = 0;
+					for (j = 0; j < _buf_len; j++) {
+						if (isprint(_buf[j])) {
+							printf("%c", _buf[j]);
 						}
-						done = false;
-						r = true;
 					}
+					done = false;
+					r = true;
 				}
 			}
-		}
-
-		if (!r) {
-			printf("error (%d): %s\n", __LINE__, stream.errmsg);
-		}
-		else if ((r) && (0 == n)) {
-
 		}
 	}
 
 	return r;
 }
 
-static bool
-_query_encoding_version(ClientMessage * cmsg)
+static int
+_parse_opt(int key, char *arg, struct argp_state *state)
 {
-	*cmsg = (ClientMessage) ClientMessage_init_default;
-	cmsg->id = 1;
-	cmsg->type = ClientMessageType_CLIENT_MESSAGE_QUERY;
-	
+	static uint32_t n = 0;
+	static bool run_once = true;
+	bool r = true;
+
+	if (run_once) {
+		r = _uart_init();
+		run_once = false;
+	}
+
+	_cmsg = (ClientMessage) ClientMessage_init_default;
+	_dmsg = (DeviceMessage) DeviceMessage_init_default;
+	_cmsg.id = n + 1;
+
+	switch (key) {
+	case ('e'):
+		_cmsg.type = ClientMessageType_CLIENT_MESSAGE_QUERY;
+		_cmsg.query.type = ClientQueryType_CLIENT_QUERY_ENCODING_VERSION;
+		break;
+
+	case ('w'):
+		_cmsg.type = ClientMessageType_CLIENT_MESSAGE_COMMAND;
+		_cmsg.command.type = ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_WIFI_SSID;
+		_cmsg.command.payload.size = strlen(arg);
+		strcpy((char *) _cmsg.command.payload.bytes, arg);
+		break;
+
+	case ('p'):
+		_cmsg.type = ClientMessageType_CLIENT_MESSAGE_COMMAND;
+		_cmsg.command.type = ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_WIFI_PASS;
+		_cmsg.command.payload.size = strlen(arg);
+		strcpy((char *) _cmsg.command.payload.bytes, arg);
+		break;
+
+	default:
+		r = false;
+	}
+
+	if (r) {
+		r = _uart_write_cmsg(&_cmsg);
+	}
+
+	if (r) {
+		r = _uart_read_dmsg(&_dmsg);
+	}
+
+	if (r) {
+		switch (key) {
+		case ('e'):
+			printf(
+				"[%ld]: encoding version %d.%d.%d\n",
+				time(NULL),
+				_dmsg.query_result.version.major_version,
+				_dmsg.query_result.version.minor_version,
+				_dmsg.query_result.version.patch_version);
+			break;
+		}
+	}
+
+	return 0;
 }
 
 /***** Global Functions *****/
@@ -194,12 +251,8 @@ _query_encoding_version(ClientMessage * cmsg)
 int
 main(int argc, char * argv[])
 {
-	bool r = true;
+	struct argp argp = {_options, _parse_opt, 0, _doc, 0, 0, 0};
+	argp_parse(&argp, argc, argv, 0, 0, 0);
 
-	if (r) {
-		r = _uart_init();
-	}
-
-
-	return (r) ? 0 : 1;
+	return 0;
 }

@@ -35,7 +35,7 @@ void
 _config_rx(uint8_t * buf, uint32_t len)
 {
 	const uint32_t tx_len_max = BUFFER_LENGTH / 2;
-	uint32_t tx_len;
+	uint32_t tx_len = 0;
 	uint8_t * tx = _buffer;
 
 	bool r = true;
@@ -50,6 +50,7 @@ _config_rx(uint8_t * buf, uint32_t len)
 
 	if ((r) && (_config_tx)) {
 		r = _config_tx(tx, tx_len);
+		//ESP_LOG_BUFFER_HEXDUMP(__func__, tx, tx_len, ESP_LOG_ERROR);
 	}
 }
 
@@ -60,7 +61,7 @@ _state_ble_config(void)
 	bool r = true;
 
 	r = ble_enable(_buffer, half);
-	RETURN_TEST(r, "failed to enable BLE");
+	RETURN_TEST(r, "failed to enable BLE\n");
 
 	if (r) {
 		r = message_init(_buffer + half, half);
@@ -72,17 +73,17 @@ _state_ble_config(void)
 	}
 
 	r = ble_disable();
-	RETURN_TEST(r, "failed to disable BLE");
+	RETURN_TEST(r, "failed to disable BLE\n");
 }
 
 void
 _state_uart_config(void)
 {
+	uint32_t half = BUFFER_LENGTH / 2;
 	bool r = true;
 
 	if (r) {
-		r = uart_server_enable(_buffer, BUFFER_LENGTH / 2);
-		RETURN_TEST(r, "failed to enable UART");
+		r = message_init(_buffer + half, half);
 	}
 
 	if (r) {
@@ -90,13 +91,18 @@ _state_uart_config(void)
 		_config_tx = uart_server_tx;
 	}
 
-	while ((r) && (PEEP_STATE_BLE_CONFIG == _state)) {
+	if (r) {
+		r = uart_server_enable(_buffer, half);
+		RETURN_TEST(r, "failed to enable UART\n");
+	}
+
+	while ((r) && (PEEP_STATE_UART_CONFIG == _state)) {
 		// TODO: better sleep mechanism
 		vTaskDelay(1000 / portTICK_PERIOD_MS);
 	}
 
 	r = uart_server_disable();
-	RETURN_TEST(r, "failed to disable UART");
+	RETURN_TEST(r, "failed to disable UART\n");
 }
 
 void

@@ -1,5 +1,6 @@
 /***** Includes *****/
 
+#include "system.h"
 #include "message.h"
 #include "memory.h"
 #include "pb_common.h"
@@ -28,6 +29,8 @@ static bool
 _handle_client_command(void)
 {
 	bool r = true;
+
+	*_dmsg = (DeviceMessage) DeviceMessage_init_default;
 
 	switch (_cmsg->command.type) {
 	case (ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_DEVICE_CERT):
@@ -80,7 +83,6 @@ _handle_client_command(void)
 		break;
 	}
 
-	*_dmsg = (DeviceMessage) DeviceMessage_init_default;
 	_dmsg->id = _cmsg->id;
 	_dmsg->type = DeviceMessageType_DEVICE_MESSAGE_COMMAND_RESULT;
 	_dmsg->command_result.type = _cmsg->command.type;
@@ -101,6 +103,8 @@ _handle_client_query(void)
 {
 	bool r = true;
 
+	*_dmsg = (DeviceMessage) DeviceMessage_init_default;
+
 	switch (_cmsg->query.type) {
 	case (ClientQueryType_CLIENT_QUERY_ENCODING_VERSION):
 		_dmsg->query_result.version.major_version = MajorVersion_MAJOR_VERSION;
@@ -113,7 +117,6 @@ _handle_client_query(void)
 		r = false;
 	}
 
-	*_dmsg = (DeviceMessage) DeviceMessage_init_default;
 	_dmsg->id = _cmsg->id;
 	_dmsg->type = DeviceMessageType_DEVICE_MESSAGE_QUERY_RESULT;
 	if (r) {
@@ -122,6 +125,7 @@ _handle_client_query(void)
 	else {
 		_dmsg->query_result.result = DeviceResult_DEVICE_RESULT_ERROR;
 	}
+	_has_device_message = true;
 
 	// we have a valid message to send, set to true
 	return true;
@@ -174,7 +178,7 @@ message_client_write(uint8_t * message, uint32_t length)
 	}
 
 	if (r) {
-		switch(_dmsg->type) {
+		switch (_cmsg->type) {
 		case (ClientMessageType_CLIENT_MESSAGE_COMMAND):
 			r = _handle_client_command();
 			break;
@@ -200,7 +204,7 @@ uint32_t max_length)
 
 	if (_has_device_message) {
 		ostream = pb_ostream_from_buffer(message, max_length);
-		r = pb_encode_delimited(&ostream, DeviceMessage_fields, &_dmsg);
+		r = pb_encode_delimited(&ostream, DeviceMessage_fields, _dmsg);
 		*length = ostream.bytes_written;
 		_has_device_message = false;
 	}

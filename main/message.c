@@ -28,30 +28,37 @@ static bool _has_device_message = false;
 static bool
 _handle_client_command(void)
 {
+	int32_t len = 0;
 	bool r = true;
 
 	*_dmsg = (DeviceMessage) DeviceMessage_init_default;
 
 	switch (_cmsg->command.type) {
 	case (ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_DEVICE_CERT):
-		r = memory_set_item(
+		len = memory_set_item(
 			MEMORY_ITEM_DEV_CERT,
 			_cmsg->command.payload.bytes,
 			_cmsg->command.payload.size);
+
+		if (0 >= len) r = false;
 		break;
 
 	case (ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_PRIVATE_KEY):
-		r = memory_set_item(
+		len = memory_set_item(
 			MEMORY_ITEM_DEV_PRIV_KEY,
 			_cmsg->command.payload.bytes,
 			_cmsg->command.payload.size);
+
+		if (0 >= len) r = false;
 		break;
 
 	case (ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_ROOT_CA):
-		r = memory_set_item(
+		len = memory_set_item(
 			MEMORY_ITEM_ROOT_CA,
 			_cmsg->command.payload.bytes,
 			_cmsg->command.payload.size);
+
+		if (0 >= len) r = false;
 		break;
 
 	case (ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_TIME):
@@ -60,17 +67,21 @@ _handle_client_command(void)
 		break;
 
 	case (ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_WIFI_PASS):
-		r = memory_set_item(
+		len = memory_set_item(
 			MEMORY_ITEM_WIFI_PASS,
 			_cmsg->command.payload.bytes,
 			_cmsg->command.payload.size);
+
+		if (0 >= len) r = false;
 		break;
 
 	case (ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_WIFI_SSID):
-		r = memory_set_item(
+		len = memory_set_item(
 			MEMORY_ITEM_WIFI_SSID,
 			_cmsg->command.payload.bytes,
 			_cmsg->command.payload.size);
+
+		if (0 >= len) r = false;
 		break;
 
 	case (ClientCommandType_CLIENT_COMMAND_CONFIGURE_HATCH):

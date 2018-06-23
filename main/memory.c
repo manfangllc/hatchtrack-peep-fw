@@ -28,12 +28,12 @@ static char * _file_lut[] = {
 bool
 memory_init(void)
 {
-	bool r = false;
+	bool r = true;
 	esp_err_t err = ESP_OK;
 	esp_vfs_spiffs_conf_t conf = {
 		.base_path = "/p",
 		.partition_label = NULL,
-		.max_files = 5,
+		.max_files = 2,
 		.format_if_mount_failed = true
 	};
 
@@ -42,15 +42,15 @@ memory_init(void)
 		// Note: esp_vfs_spiffs_register is an all-in-one convenience function.
 		err = esp_vfs_spiffs_register(&conf);
 		if (err == ESP_FAIL) {
-			printf("Failed to mount or format filesystem");
+			printf("Failed to mount or format filesystem\n");
 			r = false;
 		}
 		else if (err == ESP_ERR_NOT_FOUND) {
-			printf("Failed to find SPIFFS partition");
+			printf("Failed to find SPIFFS partition\n");
 			r = false;
 		}
 		else if (err != ESP_OK) {
-			printf("Failed to initialize SPIFFS (%d)", err);
+			printf("Failed to initialize SPIFFS (%d)\n", err);
 			r = false;
 		}
 	}
@@ -60,10 +60,10 @@ memory_init(void)
 		size_t total = 0, used = 0;
 		err = esp_spiffs_info(NULL, &total, &used);
 		if (err != ESP_OK) {
-			printf("Failed to get SPIFFS partition information");
+			printf("Failed to get SPIFFS partition information\n");
 		}
 		else {
-			printf("Partition size: total: %d, used: %d", total, used);
+			printf("Partition size: total: %d, used: %d\n", total, used);
 		}
 	}
 
@@ -78,18 +78,24 @@ memory_get_item(enum memory_item item, uint8_t * dst, uint32_t len)
 	bool r = true;
 
 	if (item <= MEMORY_ITEM_INVALID) {
+		printf("item = %d\n", item);
 		r = false;
 	}
 
 	if (r) {
 		fp = fopen(_file_lut[item], "r");
 		if (!fp) {
+			printf("failed to open %s\n", _file_lut[item]);
 			r = false;
 		}
 	}
 
 	if (r) {
 		s = fread(dst, sizeof(uint8_t), len, fp);
+	}
+
+	if (fp) {
+		fclose(fp);
 	}
 
 	return s;
@@ -108,13 +114,18 @@ memory_set_item(enum memory_item item, uint8_t * src, uint32_t len)
 
 	if (r) {
 		fp = fopen(_file_lut[item], "w");
-		if (!fp) {
+		if (NULL == fp) {
+			printf("failed to open %s\n", _file_lut[item]);
 			r = false;
 		}
 	}
 
 	if (r) {
-		s = fread(src, sizeof(uint8_t), len, fp);
+		s = fwrite(src, sizeof(uint8_t), len, fp);
+	}
+
+	if (fp) {
+		fclose(fp);
 	}
 
 	return s;

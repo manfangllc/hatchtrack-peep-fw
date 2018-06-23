@@ -166,12 +166,14 @@ _uart_read_dmsg(DeviceMessage * dmsg)
 					done = true;
 				}
 				else {
+					printf("debug:\n");
 					uint32_t j = 0;
 					for (j = 0; j < _buf_len; j++) {
 						if (isprint(_buf[j])) {
 							printf("%c", _buf[j]);
 						}
 					}
+					printf("\n");
 					done = false;
 					r = true;
 				}
@@ -188,11 +190,6 @@ _parse_opt(int key, char *arg, struct argp_state *state)
 	static uint32_t n = 0;
 	static bool run_once = true;
 	bool r = true;
-
-	if (run_once) {
-		r = _uart_init();
-		run_once = false;
-	}
 
 	_cmsg = (ClientMessage) ClientMessage_init_default;
 	_dmsg = (DeviceMessage) DeviceMessage_init_default;
@@ -222,6 +219,11 @@ _parse_opt(int key, char *arg, struct argp_state *state)
 		r = false;
 	}
 
+	if ((run_once) && (r)) {
+		r = _uart_init();
+		run_once = false;
+	}
+
 	if (r) {
 		r = _uart_write_cmsg(&_cmsg);
 	}
@@ -233,12 +235,50 @@ _parse_opt(int key, char *arg, struct argp_state *state)
 	if (r) {
 		switch (key) {
 		case ('e'):
-			printf(
-				"[%ld]: encoding version %d.%d.%d\n",
-				time(NULL),
-				_dmsg.query_result.version.major_version,
-				_dmsg.query_result.version.minor_version,
-				_dmsg.query_result.version.patch_version);
+			if (DeviceResult_DEVICE_RESULT_SUCCESS != _dmsg.query_result.result) {
+				printf(
+					"[%ld]: failed to read encoding version (%d)\n",
+					time(NULL),
+					_dmsg.query_result.result);
+			}
+			else {
+				printf(
+					"[%ld]: encoding version %d.%d.%d\n",
+					time(NULL),
+					_dmsg.query_result.version.major_version,
+					_dmsg.query_result.version.minor_version,
+					_dmsg.query_result.version.patch_version);
+			}
+			break;
+
+		case ('w'):
+			if (DeviceResult_DEVICE_RESULT_SUCCESS != _dmsg.command_result.result) {
+				printf(
+					"[%ld]: failed to set WiFi SSID (%d)\n",
+					time(NULL),
+					_dmsg.command_result.result);
+			}
+			else {
+				printf(
+					"[%ld]: WiFi SSID set to %s\n",
+					time(NULL),
+					arg);
+			}
+			break;
+
+		case ('p'):
+			if (DeviceResult_DEVICE_RESULT_SUCCESS != _dmsg.command_result.result) {
+				printf(
+					"[%ld]: failed to set WiFi password (%d)\n",
+					time(NULL),
+					_dmsg.command_result.result);
+			}
+			else {
+				printf(
+					"[%ld]: WiFi password set to %s\n",
+					time(NULL),
+					arg);
+			}
 			break;
 		}
 	}

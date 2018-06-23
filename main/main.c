@@ -5,6 +5,7 @@
 #include "message.h"
 #include "ble_server.h"
 #include "uart_server.h"
+#include "memory.h"
 //#include "sensor.h"
 
 /***** Defines *****/
@@ -126,10 +127,28 @@ _state_deep_sleep(void)
 void
 app_main()
 {
+	bool r = true;
+
 	// TODO: Check mode, is hatch active?
 	// Testing BLE configuration first...
 
 	_state = PEEP_STATE_UART_CONFIG;
+
+	r = memory_init();
+	RETURN_TEST(r, "failed to initialize memory\n");
+
+	{
+		uint8_t test[32] = {'b', 'a', 'd', '\0'};
+		int32_t n = 0;
+		memset(test, 0, 32);
+		if (0 != (n = memory_get_item(MEMORY_ITEM_WIFI_SSID, test, 32))) {
+			printf("read: %d\n", n);
+			printf("SSID: %s\n", test);
+		}
+		else {
+			printf("failed to read SSID\n");
+		}
+	}
 
 	while (1) {
 		switch(_state) {

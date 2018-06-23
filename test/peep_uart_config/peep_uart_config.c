@@ -13,6 +13,7 @@
 #include <ctype.h>
 #include <argp.h>
 #include <time.h>
+#include <assert.h>
 
 #include "pb_encode.h"
 #include "pb_decode.h"
@@ -32,6 +33,8 @@
 #define PORT_NAME "/dev/ttyUSB0"
 #define BUF_LEN_MAX 100000
 
+#define PAYLOAD_MAX 2048
+
 /***** Global Data *****/
 
 const char *argp_program_version = "version " APP_VERSION_STRING;
@@ -43,6 +46,9 @@ static char _doc[] = "Configures Peep over UART connection.";
 static struct argp_option _options[] = {
 	{"wifi-ssid", 'w', "SSID", 0, "Wifi SSID to connect Peep to.", 0},
 	{"wifi-pass", 'p', "PASSWORD", 0, "Wifi password for connection.", 0},
+	{"root-ca", 'r', "FILE", 0, "Root certificate authority file.", 0},
+	{"dev-cert", 'c', "FILE", 0, "Device certificate file.", 0},
+	{"dev-key", 'k', "FILE", 0, "Device private key file.", 0},
 	{"encoding", 'e', 0, 0, "Obtain Protobuf encoding version.", 0}
 };
 
@@ -51,6 +57,12 @@ static uint8_t _buf[BUF_LEN_MAX];
 static uint32_t _buf_len = 0;
 static ClientMessage _cmsg = ClientMessage_init_default;
 static DeviceMessage _dmsg = DeviceMessage_init_default;
+
+/***** Tests *****/
+
+_Static_assert(
+	(sizeof(_cmsg.command.payload.bytes) == PAYLOAD_MAX),
+	"size check");
 
 /***** Local Functions *****/
 
@@ -187,6 +199,7 @@ _uart_read_dmsg(DeviceMessage * dmsg)
 static int
 _parse_opt(int key, char *arg, struct argp_state *state)
 {
+	FILE * fp = NULL;
 	static uint32_t n = 0;
 	static bool run_once = true;
 	bool r = true;
@@ -213,6 +226,51 @@ _parse_opt(int key, char *arg, struct argp_state *state)
 		_cmsg.command.type = ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_WIFI_PASS;
 		_cmsg.command.payload.size = strlen(arg);
 		strcpy((char *) _cmsg.command.payload.bytes, arg);
+		break;
+
+	case ('r'):
+		fp = fopen(arg, "rb");
+		if (fp) {
+			_cmsg.type = ClientMessageType_CLIENT_MESSAGE_COMMAND;
+			_cmsg.command.type =
+				ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_ROOT_CA;
+			_cmsg.command.payload.size = fread(
+				_cmsg.command.payload.bytes,
+				1,
+				PAYLOAD_MAX,
+				fp);
+			fclose(fp);
+		}
+		break;
+
+	case ('c'):
+		fp = fopen(arg, "rb");
+		if (fp) {
+			_cmsg.type = ClientMessageType_CLIENT_MESSAGE_COMMAND;
+			_cmsg.command.type =
+				ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_DEVICE_CERT;
+			_cmsg.command.payload.size = fread(
+				_cmsg.command.payload.bytes,
+				1,
+				PAYLOAD_MAX,
+				fp);
+			fclose(fp);
+		}
+		break;
+
+	case ('k'):
+		fp = fopen(arg, "rb");
+		if (fp) {
+			_cmsg.type = ClientMessageType_CLIENT_MESSAGE_COMMAND;
+			_cmsg.command.type =
+				ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_PRIVATE_KEY;
+			_cmsg.command.payload.size = fread(
+				_cmsg.command.payload.bytes,
+				1,
+				PAYLOAD_MAX,
+				fp);
+			fclose(fp);
+		}
 		break;
 
 	default:

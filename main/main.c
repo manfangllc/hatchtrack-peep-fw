@@ -2,6 +2,7 @@
 
 #include "nvs_flash.h"
 #include "system.h"
+#include "wifi.h"
 #include "message.h"
 #include "ble_server.h"
 #include "uart_server.h"
@@ -16,23 +17,40 @@
 /***** Enums *****/
 
 enum peep_state {
+	PEEP_STATE_MIN = 0,
+
 	PEEP_STATE_UNKNOWN = 0,
 	PEEP_STATE_BLE_CONFIG,
 	PEEP_STATE_UART_CONFIG,
 	PEEP_STATE_DEEP_SLEEP,
 	PEEP_STATE_MEASURE,
+
+	PEEP_STATE_MAX = 0xFFFF,
 };
 
 /***** Local Data *****/
 
-volatile enum peep_state _state = PEEP_STATE_UNKNOWN;
 static uint8_t _buffer[BUFFER_LENGTH];
-
 static bool(*_config_tx)(uint8_t * buf, uint32_t len) = NULL;
 
 /***** Local Functions *****/
 
-void
+static void
+deep_sleep(uint32_t sec)
+{
+	esp_err_t r = ESP_OK;
+	uint64_t wakeup_time_usec = sec * 1000000;
+
+	printf("Entering %d second deep sleep\n", sec);
+
+	r = esp_sleep_enable_timer_wakeup(wakeup_time_usec);
+	RETURN_TEST((ESP_OK == r), "failed to set wakeup timer");
+
+	// Will not return from the above function.
+	esp_deep_sleep_start();
+}
+
+static void
 _config_rx(uint8_t * buf, uint32_t len)
 {
 	const uint32_t tx_len_max = BUFFER_LENGTH / 2;
@@ -55,7 +73,7 @@ _config_rx(uint8_t * buf, uint32_t len)
 	}
 }
 
-void
+static void
 _state_ble_config(void)
 {
 	uint32_t half = BUFFER_LENGTH / 2;
@@ -68,7 +86,7 @@ _state_ble_config(void)
 		r = message_init(_buffer + half, half);
 	}
 
-	while ((r) && (PEEP_STATE_BLE_CONFIG == _state)) {
+	while (1) {
 		// TODO: better sleep mechanism
 		vTaskDelay(1000 / portTICK_PERIOD_MS);
 	}
@@ -77,7 +95,7 @@ _state_ble_config(void)
 	RETURN_TEST(r, "failed to disable BLE\n");
 }
 
-void
+static void
 _state_uart_config(void)
 {
 	uint32_t half = BUFFER_LENGTH / 2;
@@ -97,7 +115,7 @@ _state_uart_config(void)
 		RETURN_TEST(r, "failed to enable UART\n");
 	}
 
-	while ((r) && (PEEP_STATE_UART_CONFIG == _state)) {
+	while (1) {
 		// TODO: better sleep mechanism
 		vTaskDelay(1000 / portTICK_PERIOD_MS);
 	}
@@ -106,20 +124,27 @@ _state_uart_config(void)
 	RETURN_TEST(r, "failed to disable UART\n");
 }
 
-void
-_state_deep_sleep(void)
+static void
+_state_measure(void)
 {
-	esp_err_t r = ESP_OK;
-	const uint32_t wakeup_time_sec = PEEP_STATE_DEEP_SLEEP_TIME_MIN * 60;
-	const uint64_t wakeup_time_usec = wakeup_time_sec * 1000000;
+	const uint32_t next_measure_delay_sec = 15 * 60;
+	enum peep_state next = PEEP_STATE_UNKNOWN;
+	bool r = true;
 
-	printf("Entering %d second deep sleep\n", wakeup_time_sec);
+	if (r) {
+		r = wifi_connect();
+	}
 
-	r = esp_sleep_enable_timer_wakeup(wakeup_time_usec);
-	RETURN_TEST((ESP_OK == r), "failed to set wakeup timer");
-
-	// Will not return from the above function.
-	esp_deep_sleep_start();
+	if (r) {
+		next = PEEP_STATE_MEASURE;
+		memory_set_item(MEMORY_ITEM_STATE, (uint8_t*) &next, sizeof(next));
+		deep_sleep(next_measure_delay_sec);
+	}
+	else {
+		next = PEEP_STATE_UART_CONFIG;
+		memory_set_item(MEMORY_ITEM_STATE, (uint8_t*) &next, sizeof(next));
+		deep_sleep(0);
+	}
 }
 
 /***** Global Functions *****/
@@ -127,47 +152,37 @@ _state_deep_sleep(void)
 void
 app_main()
 {
+	volatile enum peep_state state = PEEP_STATE_UNKNOWN;
 	bool r = true;
-
-	// TODO: Check mode, is hatch active?
-	// Testing BLE configuration first...
-
-	_state = PEEP_STATE_UART_CONFIG;
 
 	r = memory_init();
 	RETURN_TEST(r, "failed to initialize memory\n");
 
-	{
-		uint8_t test[32] = {'b', 'a', 'd', '\0'};
-		int32_t n = 0;
-		memset(test, 0, 32);
-		if (0 != (n = memory_get_item(MEMORY_ITEM_WIFI_SSID, test, 32))) {
-			printf("read: %d\n", n);
-			printf("SSID: %s\n", test);
-		}
-		else {
-			printf("failed to read SSID\n");
-		}
+	r = memory_get_item(MEMORY_ITEM_STATE, (uint8_t*) &state, sizeof(state));
+	if (false == r) {
+		printf("failed to read state\n");
+		state = PEEP_STATE_UNKNOWN;
 	}
 
-	while (1) {
-		switch(_state) {
-		case (PEEP_STATE_BLE_CONFIG):
-			_state_ble_config();
-			break;
+	switch(state) {
+	case (PEEP_STATE_BLE_CONFIG):
+		_state_ble_config();
+		break;
 
-		case (PEEP_STATE_UART_CONFIG):
-			_state_uart_config();
-			break;
+	case (PEEP_STATE_UART_CONFIG):
+		_state_uart_config();
+		break;
 
-		case (PEEP_STATE_MEASURE):
-			
+	case (PEEP_STATE_MEASURE):
+		_state_measure();
+		break;
 
-		case (PEEP_STATE_DEEP_SLEEP):
-		case (PEEP_STATE_UNKNOWN):
-		default:
-			_state_deep_sleep();
-		}
-		
+	case (PEEP_STATE_UNKNOWN):
+	default:
+		state = PEEP_STATE_UART_CONFIG;
+		memory_set_item(MEMORY_ITEM_STATE, (uint8_t*) &state, sizeof(state));
+		deep_sleep(0);
 	}
-} 
+
+	// should not return from above code...
+}

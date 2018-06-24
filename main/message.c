@@ -43,6 +43,15 @@ _handle_client_command(void)
 		if (0 >= len) r = false;
 		break;
 
+	case (ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_DEVICE_UUID):
+		len = memory_set_item(
+			MEMORY_ITEM_UUID,
+			_cmsg->command.payload.bytes,
+			_cmsg->command.payload.size);
+
+		if (0 >= len) r = false;
+		break;
+
 	case (ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_PRIVATE_KEY):
 		len = memory_set_item(
 			MEMORY_ITEM_DEV_PRIV_KEY,
@@ -82,11 +91,6 @@ _handle_client_command(void)
 			_cmsg->command.payload.size);
 
 		if (0 >= len) r = false;
-		break;
-
-	case (ClientCommandType_CLIENT_COMMAND_CONFIGURE_HATCH):
-		// TODO: Protobuf code for this needs some thought...
-		r = false;
 		break;
 
 	default:

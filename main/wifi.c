@@ -117,13 +117,27 @@ wifi_connect(void)
 
 	if (r) {
 		len = memory_get_item(MEMORY_ITEM_WIFI_SSID, wifi_config.sta.ssid, 32);
-		if (len <= 0) r = false;
+		if (len <= 0) {
+			r = false;
+		}
+		else {
+			wifi_config.sta.ssid[len] = '\0';
+			printf("ssid (%d) = %s\n", len, wifi_config.sta.ssid);
+		}
 	}
 
 	if (r) {
 		len = memory_get_item(MEMORY_ITEM_WIFI_PASS, wifi_config.sta.password, 32);
-		if (len <= 0) r = false;
+		if (len <= 0) {
+			r = false;
+		}
+		else {
+			wifi_config.sta.password[len] = '\0';
+			printf("password (%d) = %s\n", len, wifi_config.sta.password);
+		}
 	}
+
+	ESP_LOGI(__func__, "Setting WiFi configuration SSID %s...", wifi_config.sta.ssid);
 
 	if (r) {
 		tcpip_adapter_init();

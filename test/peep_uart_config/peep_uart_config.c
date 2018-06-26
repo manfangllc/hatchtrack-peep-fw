@@ -49,19 +49,20 @@ static struct argp_option _options[] = {
 	{"root-ca", 'r', "FILE", 0, "Root certificate authority file.", 0},
 	{"dev-cert", 'c', "FILE", 0, "Device certificate file.", 0},
 	{"dev-key", 'k', "FILE", 0, "Device private key file.", 0},
+	{"uuid", 'u', "ID", 0, "Universally unique identifier for Peep.", 0},
 	{"encoding", 'e', 0, 0, "Obtain Protobuf encoding version.", 0}
 };
 
 static int _fd = -1;
 static uint8_t _buf[BUF_LEN_MAX];
 static uint32_t _buf_len = 0;
-static ClientMessage _cmsg = ClientMessage_init_default;
-static DeviceMessage _dmsg = DeviceMessage_init_default;
+static ClientMessage _c = ClientMessage_init_default;
+static DeviceMessage _d = DeviceMessage_init_default;
 
 /***** Tests *****/
 
 _Static_assert(
-	(sizeof(_cmsg.command.payload.bytes) == PAYLOAD_MAX),
+	(sizeof(_c.command.payload.bytes) == PAYLOAD_MAX),
 	"size check");
 
 /***** Local Functions *****/
@@ -204,38 +205,50 @@ _parse_opt(int key, char *arg, struct argp_state *state)
 	static bool run_once = true;
 	bool r = true;
 
-	_cmsg = (ClientMessage) ClientMessage_init_default;
-	_dmsg = (DeviceMessage) DeviceMessage_init_default;
-	_cmsg.id = n + 1;
+	_c = (ClientMessage) ClientMessage_init_default;
+	_d = (DeviceMessage) DeviceMessage_init_default;
+	_c.id = n + 1;
 
 	switch (key) {
 	case ('e'):
-		_cmsg.type = ClientMessageType_CLIENT_MESSAGE_QUERY;
-		_cmsg.query.type = ClientQueryType_CLIENT_QUERY_ENCODING_VERSION;
+		printf("[%ld]: read eoncoding version\n", time(NULL));
+		_c.type = ClientMessageType_CLIENT_MESSAGE_QUERY;
+		_c.query.type = ClientQueryType_CLIENT_QUERY_ENCODING_VERSION;
+		break;
+
+	case ('u'):
+		printf("[%ld]: uuid %s\n", time(NULL), arg);
+		_c.type = ClientMessageType_CLIENT_MESSAGE_COMMAND;
+		_c.command.type = ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_DEVICE_UUID;
+		_c.command.payload.size = strlen(arg);
+		strcpy((char *) _c.command.payload.bytes, arg);
 		break;
 
 	case ('w'):
-		_cmsg.type = ClientMessageType_CLIENT_MESSAGE_COMMAND;
-		_cmsg.command.type = ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_WIFI_SSID;
-		_cmsg.command.payload.size = strlen(arg);
-		strcpy((char *) _cmsg.command.payload.bytes, arg);
+		printf("[%ld]: wifi ssid %s\n", time(NULL), arg);
+		_c.type = ClientMessageType_CLIENT_MESSAGE_COMMAND;
+		_c.command.type = ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_WIFI_SSID;
+		_c.command.payload.size = strlen(arg);
+		strcpy((char *) _c.command.payload.bytes, arg);
 		break;
 
 	case ('p'):
-		_cmsg.type = ClientMessageType_CLIENT_MESSAGE_COMMAND;
-		_cmsg.command.type = ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_WIFI_PASS;
-		_cmsg.command.payload.size = strlen(arg);
-		strcpy((char *) _cmsg.command.payload.bytes, arg);
+		printf("[%ld]: wifi password %s\n", time(NULL), arg);
+		_c.type = ClientMessageType_CLIENT_MESSAGE_COMMAND;
+		_c.command.type = ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_WIFI_PASS;
+		_c.command.payload.size = strlen(arg);
+		strcpy((char *) _c.command.payload.bytes, arg);
 		break;
 
 	case ('r'):
+		printf("[%ld]: root ca %s\n", time(NULL), arg);
 		fp = fopen(arg, "rb");
 		if (fp) {
-			_cmsg.type = ClientMessageType_CLIENT_MESSAGE_COMMAND;
-			_cmsg.command.type =
+			_c.type = ClientMessageType_CLIENT_MESSAGE_COMMAND;
+			_c.command.type =
 				ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_ROOT_CA;
-			_cmsg.command.payload.size = fread(
-				_cmsg.command.payload.bytes,
+			_c.command.payload.size = fread(
+				_c.command.payload.bytes,
 				1,
 				PAYLOAD_MAX,
 				fp);
@@ -244,13 +257,14 @@ _parse_opt(int key, char *arg, struct argp_state *state)
 		break;
 
 	case ('c'):
+		printf("[%ld]: device certificate %s\n", time(NULL), arg);
 		fp = fopen(arg, "rb");
 		if (fp) {
-			_cmsg.type = ClientMessageType_CLIENT_MESSAGE_COMMAND;
-			_cmsg.command.type =
+			_c.type = ClientMessageType_CLIENT_MESSAGE_COMMAND;
+			_c.command.type =
 				ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_DEVICE_CERT;
-			_cmsg.command.payload.size = fread(
-				_cmsg.command.payload.bytes,
+			_c.command.payload.size = fread(
+				_c.command.payload.bytes,
 				1,
 				PAYLOAD_MAX,
 				fp);
@@ -259,13 +273,14 @@ _parse_opt(int key, char *arg, struct argp_state *state)
 		break;
 
 	case ('k'):
+		printf("[%ld]: device private key %s\n", time(NULL), arg);
 		fp = fopen(arg, "rb");
 		if (fp) {
-			_cmsg.type = ClientMessageType_CLIENT_MESSAGE_COMMAND;
-			_cmsg.command.type =
+			_c.type = ClientMessageType_CLIENT_MESSAGE_COMMAND;
+			_c.command.type =
 				ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_PRIVATE_KEY;
-			_cmsg.command.payload.size = fread(
-				_cmsg.command.payload.bytes,
+			_c.command.payload.size = fread(
+				_c.command.payload.bytes,
 				1,
 				PAYLOAD_MAX,
 				fp);
@@ -283,59 +298,40 @@ _parse_opt(int key, char *arg, struct argp_state *state)
 	}
 
 	if (r) {
-		r = _uart_write_cmsg(&_cmsg);
+		r = _uart_write_cmsg(&_c);
 	}
 
 	if (r) {
-		r = _uart_read_dmsg(&_dmsg);
+		r = _uart_read_dmsg(&_d);
 	}
 
 	if (r) {
 		switch (key) {
 		case ('e'):
-			if (DeviceResult_DEVICE_RESULT_SUCCESS != _dmsg.query_result.result) {
-				printf(
-					"[%ld]: failed to read encoding version (%d)\n",
-					time(NULL),
-					_dmsg.query_result.result);
-			}
-			else {
+			if (DeviceResult_DEVICE_RESULT_SUCCESS == _d.query_result.result) {
 				printf(
 					"[%ld]: encoding version %d.%d.%d\n",
 					time(NULL),
-					_dmsg.query_result.version.major_version,
-					_dmsg.query_result.version.minor_version,
-					_dmsg.query_result.version.patch_version);
-			}
-			break;
-
-		case ('w'):
-			if (DeviceResult_DEVICE_RESULT_SUCCESS != _dmsg.command_result.result) {
-				printf(
-					"[%ld]: failed to set WiFi SSID (%d)\n",
-					time(NULL),
-					_dmsg.command_result.result);
+					_d.query_result.version.major_version,
+					_d.query_result.version.minor_version,
+					_d.query_result.version.patch_version);
 			}
 			else {
-				printf(
-					"[%ld]: WiFi SSID set to %s\n",
-					time(NULL),
-					arg);
+				printf("[%ld]: error (%d)\n", time(NULL), _d.query_result.result);
 			}
 			break;
 
+		case ('c'):
+		case ('k'):
 		case ('p'):
-			if (DeviceResult_DEVICE_RESULT_SUCCESS != _dmsg.command_result.result) {
-				printf(
-					"[%ld]: failed to set WiFi password (%d)\n",
-					time(NULL),
-					_dmsg.command_result.result);
+		case ('r'):
+		case ('w'):
+		case ('u'):
+			if (DeviceResult_DEVICE_RESULT_SUCCESS == _d.command_result.result) {
+				printf("[%ld]: success\n", time(NULL));
 			}
 			else {
-				printf(
-					"[%ld]: WiFi password set to %s\n",
-					time(NULL),
-					arg);
+				printf("[%ld]: error (%d)\n", time(NULL), _d.command_result.result);
 			}
 			break;
 		}

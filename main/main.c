@@ -131,6 +131,8 @@ _state_measure(void)
 	enum peep_state next = PEEP_STATE_UNKNOWN;
 	bool r = true;
 
+	vTaskDelay(10000 / portTICK_PERIOD_MS);
+
 	if (r) {
 		r = wifi_connect();
 	}
@@ -154,6 +156,8 @@ app_main()
 {
 	volatile enum peep_state state = PEEP_STATE_UNKNOWN;
 	bool r = true;
+
+	nvs_flash_init();
 
 	r = memory_init();
 	RETURN_TEST(r, "failed to initialize memory\n");

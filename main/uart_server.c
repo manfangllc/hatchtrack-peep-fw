@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include "uart_server.h"
 #include "system.h"
+#include "peep_message_header.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/uart.h"
@@ -40,25 +41,56 @@ static struct uart_server _server = {
 static void
 _uart_server_rx(void * arg)
 {
-	TickType_t ticks_to_wait;
-	int len = 0;
+	struct peep_message_header header;
+	//TickType_t ticks_to_wait;
+	uint32_t magic = 0;
+	uint32_t version = 0;
+	uint32_t length = 0;
+	uint32_t n = 0;
+	int bytes = 0;
+	bool r = true;
 
 	while (1) {
 		// sit in this loop while data is being received, break out when no data
-		do {
-			uint32_t n = _server.rx_len;
+		bytes = 0;
+		r = true;
+		while ((r) && (bytes != sizeof(struct peep_message_header))) {
 			// read data...
-			len = uart_read_bytes(
+			bytes = uart_read_bytes(
+				UART_NUM_0,
+				(uint8_t *) &(header),
+				sizeof(struct peep_message_header),
+				100 / portTICK_RATE_MS);
+		}
+
+		if (r) {
+			magic = PEEP_MESSAGE_HEADER_GET_MAGIC(header);
+			version = PEEP_MESSAGE_HEADER_GET_VERSION(header); 
+			length = PEEP_MESSAGE_HEADER_GET_LENGTH(header);
+
+			if (PEEP_MESSAGE_HEADER_MAGIC != magic) {
+				r = false;
+			}
+			else if (PEEP_MESSAGE_HEADER_VERSION != version) {
+				r = false;
+			}
+			else if (_server.rx_len_max < length) {
+				r = false;
+			}
+		}
+
+		while ((r) && (_server.rx_len != length)) {
+			n = _server.rx_len;
+
+			bytes = uart_read_bytes(
 				UART_NUM_0,
 				&(_server.rx_buf[n]),
-				_server.rx_len_max - n,
+				length - n,
 				100 / portTICK_RATE_MS);
 
 			// adjust offset...
-			if (len > 0) _server.rx_len += len;
-
-			// until no more data is read
-		} while (0 != len); 
+			if (bytes > 0) _server.rx_len += bytes;
+		}
 
 		if ((_server.rx_callback) && (0 != _server.rx_len)) {
 			_server.rx_callback(_server.rx_buf, _server.rx_len);
@@ -156,12 +188,33 @@ uart_server_disable(void)
 bool
 uart_server_tx(uint8_t * tx_buf, uint32_t tx_buf_len)
 {
+	struct peep_message_header header;
 	int tx_len = tx_buf_len;
 	int len = 0;
+	bool r = true;
 
-	len = uart_write_bytes(UART_NUM_0, (const char *) tx_buf, tx_len);
+	if (r) {
+		header = (struct peep_message_header) PEEP_MESSAGE_HEADER_INIT(tx_buf_len);
+		len = uart_write_bytes(
+			UART_NUM_0,
+			(const char *) &header,
+			sizeof(struct peep_message_header));
+		if (len != sizeof(struct peep_message_header)) {
+			r = false;
+		}
+	}
 
-	return (len == tx_len) ? true : false;
+	if (r) {
+		len = uart_write_bytes(
+			UART_NUM_0,
+			(const char *) tx_buf,
+			tx_len);
+		if (len != tx_len) {
+			r = false;
+		}
+	}
+
+	return r;
 }
 
 void

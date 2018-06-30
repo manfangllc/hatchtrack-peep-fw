@@ -7,26 +7,13 @@
 #include "ble_server.h"
 #include "uart_server.h"
 #include "memory.h"
+#include "state.h"
 //#include "sensor.h"
 
 /***** Defines *****/
 
 #define PEEP_STATE_DEEP_SLEEP_TIME_MIN 15
 #define BUFFER_LENGTH 8192
-
-/***** Enums *****/
-
-enum peep_state {
-	PEEP_STATE_MIN = 0,
-
-	PEEP_STATE_UNKNOWN = 0,
-	PEEP_STATE_BLE_CONFIG,
-	PEEP_STATE_UART_CONFIG,
-	PEEP_STATE_DEEP_SLEEP,
-	PEEP_STATE_MEASURE,
-
-	PEEP_STATE_MAX = 0xFFFF,
-};
 
 /***** Local Data *****/
 
@@ -162,11 +149,12 @@ app_main()
 	r = memory_init();
 	RETURN_TEST(r, "failed to initialize memory\n");
 
-	r = memory_get_item(MEMORY_ITEM_STATE, (uint8_t*) &state, sizeof(state));
-	if (false == r) {
-		printf("failed to read state\n");
-		state = PEEP_STATE_UNKNOWN;
-	}
+	//r = memory_get_item(MEMORY_ITEM_STATE, (uint8_t*) &state, sizeof(state));
+	//if (false == r) {
+		//printf("failed to read state\n");
+		//state = PEEP_STATE_UNKNOWN;
+	//}
+	state = PEEP_STATE_UART_CONFIG;
 
 	switch(state) {
 	case (PEEP_STATE_BLE_CONFIG):

@@ -23,6 +23,8 @@ static char * _file_lut[] = {
 	"/p/rootca", // MEMORY_ITEM_ROOT_CA
 	"/p/devcert", // MEMORY_ITEM_DEV_CERT
 	"/p/devpriv", // MEMORY_ITEM_DEV_PRIV_KEY
+	"/p/nummeas", // MEMORY_ITEM_DEV_PRIV_KEY
+	"/p/minmeas", // MEMORY_ITEM_DEV_PRIV_KEY
 };
 
 /***** Global Functions *****/

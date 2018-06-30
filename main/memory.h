@@ -18,6 +18,8 @@ enum memory_item {
 	MEMORY_ITEM_ROOT_CA,
 	MEMORY_ITEM_DEV_CERT,
 	MEMORY_ITEM_DEV_PRIV_KEY,
+	MEMORY_ITEM_MEASURE_COUNT,
+	MEMORY_ITEM_MEASURE_MIN,
 };
 
 /***** Global Functions *****/

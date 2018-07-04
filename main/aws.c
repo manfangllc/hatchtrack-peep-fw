@@ -2,6 +2,8 @@
 
 #include "aws.h"
 #include "system.h"
+#include "memory.h"
+#include "state.h"
 
 #include "aws_iot_config.h"
 #include "aws_iot_log.h"
@@ -41,7 +43,6 @@ void *pContextData)
 	}
 }
 
-
 void
 disconnectCallbackHandler(AWS_IoT_Client *pClient, void *data)
 {
@@ -69,68 +70,108 @@ disconnectCallbackHandler(AWS_IoT_Client *pClient, void *data)
 /***** Global Functions *****/
 
 bool
-aws_connect(void)
+aws_connect(uint8_t * buf, uint32_t len)
 {
-#if 0
+	bool r = true;
+	int32_t m = 0;
+	int32_t n = 0;
+
 	IoT_Client_Init_Params mqtt_params = iotClientInitParamsDefault;
 	IoT_Client_Connect_Params connect_params = iotClientConnectParamsDefault;
-	IoT_Error_t r = SUCCESS;
+	IoT_Error_t err = SUCCESS;
 
-	mqtt_params.enableAutoReconnect = false; // We enable this later below
+	mqtt_params.enableAutoReconnect = false;
 	mqtt_params.pHostURL = AWS_HOST_NAME;
 	mqtt_params.port = AWS_PORT_NUMBER;
-
-	mqtt_params.pRootCALocation = (const char *) aws_root_ca_pem;
-	mqtt_params.pDeviceCertLocation = (const char *) certificate_pem_crt;
-	mqtt_params.pDevicePrivateKeyLocation = (const char *) private_pem_key;
-
 	mqtt_params.mqttCommandTimeout_ms = 20000;
 	mqtt_params.tlsHandshakeTimeout_ms = 5000;
 	mqtt_params.isSSLHostnameVerify = true;
 	mqtt_params.disconnectHandler = disconnectCallbackHandler;
 	mqtt_params.disconnectHandlerData = NULL;
-
-	r = aws_iot_mqtt_init(&_client, &mqtt_params);
-	RETURN_TEST(SUCCESS == r, "aws_iot_mqtt_init returned error %d\n", r);
-
 	connect_params.keepAliveIntervalInSec = 10;
 	connect_params.isCleanSession = true;
 	connect_params.MQTTVersion = MQTT_3_1_1;
-	/* Client ID is set in the menuconfig of the example */
-	connect_params.pClientID = AWS_THING_NAME;
-	connect_params.clientIDLen = (uint16_t) strlen(AWS_THING_NAME);
 	connect_params.isWillMsgPresent = false;
 
-	ESP_LOGI(__func__, "Connecting to AWS...");
-	do {
-		r = aws_iot_mqtt_connect(&_client, &connect_params);
-		if(SUCCESS != r) {
-			ESP_LOGE(
-				__func__,
-				"Error(%d) connecting to %s:%d",
-				r,
-				mqtt_params.pHostURL,
-				mqtt_params.port);
-				vTaskDelay(1000 / portTICK_RATE_MS);
+	if (r) {
+		n = memory_get_item(MEMORY_ITEM_ROOT_CA, buf + m, len - m);
+		if (n > 0) {
+			mqtt_params.pRootCALocation = (const char *) &(buf[m]);
+			m += n;
+			buf[m++] = '\0';
+			printf("%s\n", mqtt_params.pRootCALocation);
 		}
-	} while (SUCCESS != r);
+		else {
+			r = false;
+		}
+	}
 
-#if 0
-	/*
-	 * Enable Auto Reconnect functionality. Minimum and Maximum time of 
-	 * Exponential backoff are set in aws_iot_config.h
-	 *
-	 *  #AWS_IOT_MQTT_MIN_RECONNECT_WAIT_INTERVAL
-	 *  #AWS_IOT_MQTT_MAX_RECONNECT_WAIT_INTERVAL
-	 */
-	r = aws_iot_mqtt_autoreconnect_set_status(&_client, true);
-	RETURN_TEST(
-		SUCCESS == r,
-		"aws_iot_mqtt_autoreconnect_set_status returned error %d\n",
-		r);
-#endif
-#endif
-	return true;
+	if (r) {
+		n = memory_get_item(MEMORY_ITEM_DEV_CERT, buf + m, len - m);
+		if (n > 0) {
+			mqtt_params.pDeviceCertLocation = (const char *) &(buf[m]);
+			m += n;
+			buf[m++] = '\0';
+			printf("%s\n", mqtt_params.pDeviceCertLocation);
+		}
+		else {
+			r = false;
+		}
+	}
+
+	if (r) {
+		n = memory_get_item(MEMORY_ITEM_DEV_PRIV_KEY, buf + m, len - m);
+		if (n > 0) {
+			mqtt_params.pDevicePrivateKeyLocation = (const char *) &(buf[m]);
+			m += n;
+			buf[m++] = '\0';
+			printf("%s\n", mqtt_params.pDevicePrivateKeyLocation);
+		}
+		else {
+			r = false;
+		}
+	}
+
+	if (r) {
+		n = memory_get_item(MEMORY_ITEM_UUID, buf + m, len - m);
+		if (n > 0) {
+			connect_params.pClientID = (const char *) &(buf[m]);
+			connect_params.clientIDLen = (uint16_t) n;
+			m += n;
+			buf[m++] = '\0';
+			printf("%s\n", connect_params.pClientID);
+		}
+		else {
+			r = false;
+		}
+	}
+
+	connect_params.pClientID = "6d37c3ba-e669-438a-a858-2dcc8d7fb078";
+	connect_params.clientIDLen = strlen(connect_params.pClientID);
+
+	if (r) {
+		err = aws_iot_mqtt_init(&_client, &mqtt_params);
+		RETURN_TEST(SUCCESS == err, "aws_iot_mqtt_init returned error %d\n", err);
+	}
+
+	if (r) {
+		ESP_LOGI(__func__, "Connecting to AWS...");
+		do {
+			err = aws_iot_mqtt_connect(&_client, &connect_params);
+			if(SUCCESS != err) {
+				ESP_LOGE(
+					__func__,
+					"Error(%d) connecting to %s:%d",
+					err,
+					mqtt_params.pHostURL,
+					mqtt_params.port);
+				vTaskDelay(1000 / portTICK_RATE_MS);
+			}
+		} while (SUCCESS != err);
+		printf("Connected to AWS!\n");
+	}
+
+	return r;
 }
 
 bool

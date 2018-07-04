@@ -2,28 +2,30 @@
 
 #include "nvs_flash.h"
 #include "system.h"
+#include "aws.h"
 #include "wifi.h"
 #include "message.h"
 #include "ble_server.h"
 #include "uart_server.h"
 #include "memory.h"
 #include "state.h"
-//#include "sensor.h"
+#include "sensor.h"
 
 /***** Defines *****/
 
-#define PEEP_STATE_DEEP_SLEEP_TIME_MIN 15
+#define PEEP_STATE__deep_sleep_TIME_MIN 15
 #define BUFFER_LENGTH 8192
 
 /***** Local Data *****/
 
 static uint8_t _buffer[BUFFER_LENGTH];
 static bool(*_config_tx)(uint8_t * buf, uint32_t len) = NULL;
+static volatile bool _is_config = false;
 
 /***** Local Functions *****/
 
 static void
-deep_sleep(uint32_t sec)
+_deep_sleep(uint32_t sec)
 {
 	esp_err_t r = ESP_OK;
 	uint64_t wakeup_time_usec = sec * 1000000;
@@ -56,7 +58,12 @@ _config_rx(uint8_t * buf, uint32_t len)
 
 	if ((r) && (_config_tx)) {
 		r = _config_tx(tx, tx_len);
-		//ESP_LOG_BUFFER_HEXDUMP(__func__, tx, tx_len, ESP_LOG_ERROR);
+	}
+
+	if (message_is_client_done()) {
+		// TODO: Need to delay until last Tx message is sent???
+		vTaskDelay(5000 / portTICK_PERIOD_MS);
+		_is_config = false;
 	}
 }
 
@@ -66,6 +73,7 @@ _state_ble_config(void)
 	uint32_t half = BUFFER_LENGTH / 2;
 	bool r = true;
 
+	_is_config = true;
 	r = ble_enable(_buffer, half);
 	RETURN_TEST(r, "failed to enable BLE\n");
 
@@ -73,13 +81,16 @@ _state_ble_config(void)
 		r = message_init(_buffer + half, half);
 	}
 
-	while (1) {
+	while (_is_config) {
 		// TODO: better sleep mechanism
 		vTaskDelay(1000 / portTICK_PERIOD_MS);
 	}
 
 	r = ble_disable();
-	RETURN_TEST(r, "failed to disable BLE\n");
+	if (!r) {
+		printf("failed to disable BLE\n");
+	}
+	_deep_sleep(0);
 }
 
 static void
@@ -87,6 +98,8 @@ _state_uart_config(void)
 {
 	uint32_t half = BUFFER_LENGTH / 2;
 	bool r = true;
+
+	_is_config = true;
 
 	if (r) {
 		r = message_init(_buffer + half, half);
@@ -102,37 +115,80 @@ _state_uart_config(void)
 		RETURN_TEST(r, "failed to enable UART\n");
 	}
 
-	while (1) {
+	while (_is_config) {
 		// TODO: better sleep mechanism
 		vTaskDelay(1000 / portTICK_PERIOD_MS);
 	}
 
 	r = uart_server_disable();
-	RETURN_TEST(r, "failed to disable UART\n");
+	if (!r) {
+		printf("failed to disable uart!\n");
+	}
+	_deep_sleep(0);
 }
 
 static void
 _state_measure(void)
 {
 	const uint32_t next_measure_delay_sec = 15 * 60;
-	enum peep_state next = PEEP_STATE_UNKNOWN;
+	char * id = (char *) &_buffer[BUFFER_LENGTH / 2];
+	char * msg = (char *) &_buffer[0];
+	float temperature = 0.0;
+	float humidity = 0.0;
+	int len = 0;
 	bool r = true;
 
-	vTaskDelay(10000 / portTICK_PERIOD_MS);
+	vTaskDelay(15000 / portTICK_PERIOD_MS);
 
 	if (r) {
 		r = wifi_connect();
 	}
 
 	if (r) {
-		next = PEEP_STATE_MEASURE;
-		memory_set_item(MEMORY_ITEM_STATE, (uint8_t*) &next, sizeof(next));
-		deep_sleep(next_measure_delay_sec);
+		r = aws_connect(_buffer, 8192);
+	}
+
+	if (r) {
+		r = sensor_init();
+	}
+
+	if (r) {
+		r = sensor_measure(&temperature, &humidity);
+	}
+
+	if (r) {
+		len = memory_get_item(MEMORY_ITEM_UUID, (uint8_t *) id, BUFFER_LENGTH / 2);
+		if (0 >= len) {
+			r = false;
+		}
+		else {
+			id[len] = '\0';
+		}
+	}
+
+	if (r) {
+		sprintf(
+			msg,
+			"{\n"
+			"\"hatch\": \"%s\",\n"
+			"\"temperature\": %f,\n"
+			"\"humidity\": %f\n"
+			"}",
+			id,
+			temperature,
+			humidity);
+
+		if (true != aws_publish_json((uint8_t *) msg, strlen(msg))) {
+			printf("Failed to publish message!\n");
+		}
+	}
+
+	if (r) {
+		_deep_sleep(next_measure_delay_sec);
 	}
 	else {
-		next = PEEP_STATE_UART_CONFIG;
-		memory_set_item(MEMORY_ITEM_STATE, (uint8_t*) &next, sizeof(next));
-		deep_sleep(0);
+		peep_set_state(PEEP_STATE_UART_CONFIG);
+		_deep_sleep(0);
 	}
 }
 
@@ -141,39 +197,27 @@ _state_measure(void)
 void
 app_main()
 {
-	volatile enum peep_state state = PEEP_STATE_UNKNOWN;
+	enum peep_state state = PEEP_STATE_UNKNOWN;
 	bool r = true;
 
 	nvs_flash_init();
-
 	r = memory_init();
 	RETURN_TEST(r, "failed to initialize memory\n");
 
-	//r = memory_get_item(MEMORY_ITEM_STATE, (uint8_t*) &state, sizeof(state));
-	//if (false == r) {
-		//printf("failed to read state\n");
-		//state = PEEP_STATE_UNKNOWN;
-	//}
-	state = PEEP_STATE_UART_CONFIG;
-
-	switch(state) {
-	case (PEEP_STATE_BLE_CONFIG):
-		_state_ble_config();
-		break;
-
-	case (PEEP_STATE_UART_CONFIG):
-		_state_uart_config();
-		break;
-
-	case (PEEP_STATE_MEASURE):
-		_state_measure();
-		break;
-
-	case (PEEP_STATE_UNKNOWN):
-	default:
+	r = peep_get_state(&state);
+	if ((false == r) || (PEEP_STATE_UNKNOWN == state)) {
 		state = PEEP_STATE_UART_CONFIG;
-		memory_set_item(MEMORY_ITEM_STATE, (uint8_t*) &state, sizeof(state));
-		deep_sleep(0);
+		peep_set_state(state);
+	}
+
+	if (PEEP_STATE_BLE_CONFIG == state) {
+		_state_ble_config();
+	}
+	else if (PEEP_STATE_UART_CONFIG == state) {
+		_state_uart_config();
+	}
+	else if (PEEP_STATE_MEASURE == state) {
+		_state_measure();
 	}
 
 	// should not return from above code...

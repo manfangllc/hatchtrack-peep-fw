@@ -21,4 +21,7 @@ extern bool
 message_device_response(uint8_t * message, uint32_t * length,
 uint32_t max_length);
 
+extern bool
+message_is_client_done(void);
+
 #endif

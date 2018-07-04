@@ -17,9 +17,6 @@
 // wifi_scan_ap(void);
 
 extern bool
-wifi_init(uint8_t * buf, uint32_t len);
-
-extern bool
 wifi_stop(void);
 
 extern bool

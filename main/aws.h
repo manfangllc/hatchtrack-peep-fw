@@ -9,7 +9,7 @@
 /***** Global Functions *****/
 
 extern bool
-aws_connect(void);
+aws_connect(uint8_t * buf, uint32_t len);
 
 extern bool
 aws_disconnect(void);

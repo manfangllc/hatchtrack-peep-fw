@@ -7,6 +7,8 @@
 
 /***** Local Data *****/
 
+static SemaphoreHandle_t _mutex;
+
 static char * _file_lut[] = {
 	/*
 	 * Max file length is 16 characters, including zero termination character.
@@ -59,6 +61,10 @@ memory_init(void)
 		}
 	}
 
+	if (r) {
+		_mutex = xSemaphoreCreateMutex();
+	}
+
 	// TODO: Remove this...
 	if (r) {
 		size_t total = 0, used = 0;
@@ -86,20 +92,23 @@ memory_get_item(enum memory_item item, uint8_t * dst, uint32_t len)
 		r = false;
 	}
 
-	if (r) {
-		fp = fopen(_file_lut[item], "r");
-		if (!fp) {
-			printf("failed to open %s\n", _file_lut[item]);
-			r = false;
+	if (xSemaphoreTake(_mutex, portMAX_DELAY)) {
+		if (r) {
+			fp = fopen(_file_lut[item], "r");
+			if (!fp) {
+				printf("failed to open %s\n", _file_lut[item]);
+				r = false;
+			}
 		}
-	}
 
-	if (r) {
-		s = fread(dst, sizeof(uint8_t), len, fp);
-	}
+		if (r) {
+			s = fread(dst, sizeof(uint8_t), len, fp);
+		}
 
-	if (fp) {
-		fclose(fp);
+		if (fp) {
+			fclose(fp);
+		}
+		xSemaphoreGive(_mutex);
 	}
 
 	return s;
@@ -116,20 +125,23 @@ memory_set_item(enum memory_item item, uint8_t * src, uint32_t len)
 		r = false;
 	}
 
-	if (r) {
-		fp = fopen(_file_lut[item], "w");
-		if (NULL == fp) {
-			printf("failed to open %s\n", _file_lut[item]);
-			r = false;
+	if (xSemaphoreTake(_mutex, portMAX_DELAY)) {
+		if (r) {
+			fp = fopen(_file_lut[item], "w");
+			if (NULL == fp) {
+				printf("failed to open %s\n", _file_lut[item]);
+				r = false;
+			}
 		}
-	}
 
-	if (r) {
-		s = fwrite(src, sizeof(uint8_t), len, fp);
-	}
+		if (r) {
+			s = fwrite(src, sizeof(uint8_t), len, fp);
+		}
 
-	if (fp) {
-		fclose(fp);
+		if (fp) {
+			fclose(fp);
+		}
+		xSemaphoreGive(_mutex);
 	}
 
 	return s;
@@ -138,10 +150,13 @@ memory_set_item(enum memory_item item, uint8_t * src, uint32_t len)
 bool
 memory_delete_item(enum memory_item item)
 {
-	bool r = true;
+	bool r = false;
 
-	if (0 != remove(_file_lut[item])) {
-		r = false;
+	if (xSemaphoreTake(_mutex, portMAX_DELAY)) {
+		if (0 != remove(_file_lut[item])) {
+			r = false;
+		}
+		xSemaphoreGive(_mutex);
 	}
 
 	return r;

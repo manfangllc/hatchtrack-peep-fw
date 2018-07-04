@@ -3,6 +3,7 @@
 #include "system.h"
 #include "message.h"
 #include "memory.h"
+#include "state.h"
 #include "pb_common.h"
 #include "pb_decode.h"
 #include "pb_encode.h"
@@ -16,12 +17,19 @@ _Static_assert(
 	(sizeof(pb_size_t) == sizeof(uint32_t)),
 	"pb_size_t size check");
 
+/***** Defines *****/
+
+// Obtain uint32_t stored in payload, big endian.
+#define PAYLOAD_UINT32(buf) \
+	((buf)[0] << 24) || ((buf)[1] << 16) || ((buf)[2] << 8) || ((buf)[3])
+
 /***** Local Data *****/
 
 // TODO: mutex
 static ClientMessage * _cmsg = NULL;
 static DeviceMessage * _dmsg = NULL;
 static bool _has_device_message = false;
+static bool _is_client_done = false;
 
 /***** Local Functions *****/
 
@@ -30,6 +38,7 @@ _handle_client_command(void)
 {
 	uint8_t * bytes = NULL;
 	uint32_t size = 0;
+	uint32_t tmp = 0;
 	int32_t len = 0;
 	bool r = true;
 
@@ -74,10 +83,31 @@ _handle_client_command(void)
 		break;
 
 	case (ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_MEASURE_TOTAL):
-		len = memory_set_item(MEMORY_ITEM_MEASURE_COUNT, bytes, size);
-		if (0 >= len) r = false;
+		if (sizeof(uint32_t) == size) {
+			tmp = PAYLOAD_UINT32(bytes);
+			len = memory_set_item(MEMORY_ITEM_MEASURE_COUNT, (uint8_t *) &tmp, size);
+			if (size != len) r = false;
+		}
+		else {
+			r = false;
+		}
+		break;
+
+	case (ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_MEASURE_DELAY_MIN):
+		if (sizeof(uint32_t) == size) {
+			tmp = PAYLOAD_UINT32(bytes);
+			len = memory_set_item(MEMORY_ITEM_MEASURE_MIN, (uint8_t *) &tmp, size);
+			if (size != len) r = false;
+		}
+		else {
+			r = false;
+		}
+		break;
 
 	case (ClientCommandType_CLIENT_COMMAND_START_HATCH):
+		r = peep_set_state(PEEP_STATE_MEASURE);
+		_is_client_done = true;
+		break;
 
 	default:
 		r = false;
@@ -214,4 +244,14 @@ uint32_t max_length)
 	}
 
 	return r; 
+}
+
+bool
+message_is_client_done(void)
+{
+	bool r = false;
+
+	r = _is_client_done;
+
+	return r;
 }

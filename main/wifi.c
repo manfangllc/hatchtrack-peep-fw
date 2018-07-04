@@ -108,12 +108,15 @@ _event_handler(void *ctx, system_event_t *event)
 bool
 wifi_connect(void)
 {
-	wifi_init_config_t init_config = WIFI_INIT_CONFIG_DEFAULT();
+	const TickType_t wifi_connect_timeout = 60000 / portTICK_PERIOD_MS;
+	wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
 	wifi_config_t wifi_config;
-	const TickType_t wifi_connect_timeout = 10000 / portTICK_PERIOD_MS;
-	EventBits_t bits;
+	EventBits_t bits = 0;
 	int32_t len = 0;
 	bool r = true;
+
+	// IF YOU DON'T DO THIS, YOU WILL HAVE A GARBAGE FILLED STRUCT
+	memset(&wifi_config, 0, sizeof(wifi_config_t));
 
 	if (r) {
 		len = memory_get_item(MEMORY_ITEM_WIFI_SSID, wifi_config.sta.ssid, 32);
@@ -137,20 +140,11 @@ wifi_connect(void)
 		}
 	}
 
-	ESP_LOGI(__func__, "Setting WiFi configuration SSID %s...", wifi_config.sta.ssid);
-
 	if (r) {
 		tcpip_adapter_init();
-
-		if (!wifi_event_group) {
-			wifi_event_group = xEventGroupCreate();
-		}
-	}
-
-	if (r) {
+		wifi_event_group = xEventGroupCreate();
 		ESP_ERROR_CHECK( esp_event_loop_init(_event_handler, NULL) );
-
-		ESP_ERROR_CHECK( esp_wifi_init(&init_config) );
+		ESP_ERROR_CHECK( esp_wifi_init(&cfg) );
 		ESP_ERROR_CHECK( esp_wifi_set_storage(WIFI_STORAGE_RAM) );
 		ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA) );
 		ESP_ERROR_CHECK( esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
@@ -185,6 +179,8 @@ wifi_disconnect(void)
 	if (ESP_OK != r) {
 		ESP_LOGE(__func__, "Failed to stop WiFi");
 	}
+
+	vEventGroupDelete(wifi_event_group);
 
 	return (ESP_OK == r) ? true : false;
 }

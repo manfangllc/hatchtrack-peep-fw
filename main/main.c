@@ -1,5 +1,7 @@
 /***** Includes *****/
 
+#include <time.h>
+
 #include "nvs_flash.h"
 #include "system.h"
 #include "aws.h"
@@ -130,23 +132,13 @@ _state_uart_config(void)
 static void
 _state_measure(void)
 {
-	const uint32_t next_measure_delay_sec = 15 * 60;
 	char * id = (char *) &_buffer[BUFFER_LENGTH / 2];
 	char * msg = (char *) &_buffer[0];
 	float temperature = 0.0;
 	float humidity = 0.0;
 	int len = 0;
+	uint32_t n = 0;
 	bool r = true;
-
-	vTaskDelay(15000 / portTICK_PERIOD_MS);
-
-	if (r) {
-		r = wifi_connect();
-	}
-
-	if (r) {
-		r = aws_connect(_buffer, 8192);
-	}
 
 	if (r) {
 		r = sensor_init();
@@ -154,6 +146,25 @@ _state_measure(void)
 
 	if (r) {
 		r = sensor_measure(&temperature, &humidity);
+	}
+
+	if (r) {
+		len = memory_get_item(MEMORY_ITEM_MEASURE_COUNT, (uint8_t *) &n, sizeof(n));
+		if (sizeof(n) == len) {
+			n -= 1;
+			memory_set_item(MEMORY_ITEM_MEASURE_COUNT, (uint8_t *) &n, sizeof(n));
+			if (0 == n) {
+				peep_set_state(PEEP_STATE_UART_CONFIG);
+			}
+		}
+	}
+
+	if (r) {
+		r = wifi_connect();
+	}
+
+	if (r) {
+		r = aws_connect(_buffer, 8192);
 	}
 
 	if (r) {
@@ -171,10 +182,12 @@ _state_measure(void)
 			msg,
 			"{\n"
 			"\"hatch\": \"%s\",\n"
+			"\"time\": %d,\n"
 			"\"temperature\": %f,\n"
 			"\"humidity\": %f\n"
 			"}",
 			id,
+			(int) time(NULL),
 			temperature,
 			humidity);
 
@@ -183,8 +196,17 @@ _state_measure(void)
 		}
 	}
 
+	len = memory_get_item(MEMORY_ITEM_MEASURE_MIN, (uint8_t *) n, sizeof(n));
+	if (sizeof(n) == len) {
+		n *= 60; // convert minutes to seconds
+	}
+	else {
+		n = 15 * 60; // TODO: default to 15 minutes?
+		printf("failed to read Peep measure delay, default to %d seconds\n", n);
+	}
+
 	if (r) {
-		_deep_sleep(next_measure_delay_sec);
+		_deep_sleep(n);
 	}
 	else {
 		peep_set_state(PEEP_STATE_UART_CONFIG);

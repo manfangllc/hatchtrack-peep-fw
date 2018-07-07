@@ -1,5 +1,9 @@
 /***** Includes *****/
 
+#include <sys/cdefs.h>
+#include <time.h>
+#include <sys/time.h>
+
 #include "system.h"
 #include "message.h"
 #include "memory.h"
@@ -68,8 +72,15 @@ _handle_client_command(void)
 		break;
 
 	case (ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_TIME):
-		// TODO: set the system time to the provided unix epoch
-		r = false;
+		if (sizeof(uint32_t) == size) {
+			struct timeval tv; 
+			tmp = PAYLOAD_UINT32(bytes);
+			tv.tv_sec = tmp;
+			tv.tv_usec = 0;
+			if (0 != settimeofday(&tv, NULL)) {
+				r = false;
+			}
+		}
 		break;
 
 	case (ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_WIFI_PASS):

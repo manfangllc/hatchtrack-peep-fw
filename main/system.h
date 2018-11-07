@@ -20,7 +20,7 @@
 
 /***** Defines *****/
 
-#define RETURN_TEST(cond, msg, ...) \
+#define RESULT_TEST_ERROR_TRACE(cond, msg, ...) \
 	if ((!(cond))) { \
 		while (1) { \
 			printf((msg), ##__VA_ARGS__); \

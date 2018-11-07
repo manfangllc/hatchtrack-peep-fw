@@ -151,7 +151,7 @@ aws_connect(uint8_t * buf, uint32_t len)
 
 	if (r) {
 		err = aws_iot_mqtt_init(&_client, &mqtt_params);
-		RETURN_TEST(SUCCESS == err, "aws_iot_mqtt_init returned error %d\n", err);
+		RESULT_TEST_ERROR_TRACE(SUCCESS == err, "aws_iot_mqtt_init returned error %d\n", err);
 	}
 
 	if (r) {

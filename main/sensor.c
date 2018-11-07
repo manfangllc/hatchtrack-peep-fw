@@ -113,7 +113,7 @@ sensor_init(void)
 
 	if (r) {
 		r = _i2c_master_init();
-		RETURN_TEST(r, "failed to initialize i2c interface!\n");
+		RESULT_TEST_ERROR_TRACE(r, "failed to initialize i2c interface!\n");
 	}
 
 	if (r) {

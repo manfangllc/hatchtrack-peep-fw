@@ -6,6 +6,7 @@
 #include "system.h"
 #include "aws.h"
 #include "wifi.h"
+#include "led.h"
 #include "message.h"
 #include "ble_server.h"
 #include "uart_server.h"
@@ -35,7 +36,7 @@ _deep_sleep(uint32_t sec)
 	printf("Entering %d second deep sleep\n", sec);
 
 	r = esp_sleep_enable_timer_wakeup(wakeup_time_usec);
-	RETURN_TEST((ESP_OK == r), "failed to set wakeup timer");
+	RESULT_TEST_ERROR_TRACE((ESP_OK == r), "failed to set wakeup timer");
 
 	// Will not return from the above function.
 	esp_deep_sleep_start();
@@ -77,7 +78,7 @@ _state_ble_config(void)
 
 	_is_config = true;
 	r = ble_enable(_buffer, half);
-	RETURN_TEST(r, "failed to enable BLE\n");
+	RESULT_TEST_ERROR_TRACE(r, "failed to enable BLE\n");
 
 	if (r) {
 		r = message_init(_buffer + half, half);
@@ -114,7 +115,7 @@ _state_uart_config(void)
 
 	if (r) {
 		r = uart_server_enable(_buffer, half);
-		RETURN_TEST(r, "failed to enable UART\n");
+		RESULT_TEST_ERROR_TRACE(r, "failed to enable UART\n");
 	}
 
 	while (_is_config) {
@@ -223,8 +224,9 @@ app_main()
 	bool r = true;
 
 	nvs_flash_init();
+	led_init();
 	r = memory_init();
-	RETURN_TEST(r, "failed to initialize memory\n");
+	RESULT_TEST_ERROR_TRACE(r, "failed to initialize memory\n");
 
 	r = peep_get_state(&state);
 	if ((false == r) || (PEEP_STATE_UNKNOWN == state)) {

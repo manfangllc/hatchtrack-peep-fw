@@ -35,6 +35,17 @@
 
 #define PAYLOAD_MAX 2048
 
+/***** Macros *****/
+
+// Stores uint32_t into buffer big endian encoding.
+#define UINT32_TO_PAYLOAD(buf, u32) \
+	do { \
+		(buf)[0] = (u32) >> 24; \
+		(buf)[1] = (u32) >> 16; \
+		(buf)[2] = (u32) >> 8; \
+		(buf)[3] = (u32) >> 0; \
+	} while (0)
+
 /***** Global Data *****/
 
 const char *argp_program_version = "version " APP_VERSION_STRING;
@@ -50,7 +61,9 @@ static struct argp_option _options[] = {
 	{"dev-cert", 'c', "FILE", 0, "Device certificate file.", 0},
 	{"dev-key", 'k', "FILE", 0, "Device private key file.", 0},
 	{"uuid", 'u', "ID", 0, "Universally unique identifier for Peep.", 0},
-	{"encoding", 'e', 0, 0, "Obtain Protobuf encoding version.", 0}
+	{"encoding", 'e', 0, 0, "Obtain Protobuf encoding version.", 0},
+	{"samples", 's', "NUMBER", 0, "Total number of samples for hatch.", 0},
+	{"time", 't', "SECONDS", 0, "Measurement period time in seconds.", 0},
 };
 
 static int _fd = -1;
@@ -203,6 +216,7 @@ _parse_opt(int key, char *arg, struct argp_state *state)
 	FILE * fp = NULL;
 	static uint32_t n = 0;
 	static bool run_once = true;
+	uint32_t val = 0;
 	bool r = true;
 
 	_c = (ClientMessage) ClientMessage_init_default;
@@ -286,6 +300,24 @@ _parse_opt(int key, char *arg, struct argp_state *state)
 				fp);
 			fclose(fp);
 		}
+		break;
+
+	case ('s'):
+		printf("[%ld]: measurement samples %s\n", time(NULL), arg);
+		_c.type = ClientMessageType_CLIENT_MESSAGE_COMMAND;
+		_c.command.type =
+			ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_MEASURE_TOTAL;
+		val = (uint32_t) strtod(arg, NULL);
+		UINT32_TO_PAYLOAD(_c.command.payload.bytes, val);
+		break;
+
+	case ('t'):
+		printf("[%ld]: measurement period time seconds %s\n", time(NULL), arg);
+		_c.type = ClientMessageType_CLIENT_MESSAGE_COMMAND;
+		_c.command.type =
+			ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_MEASURE_DELAY_SEC;
+		val = (uint32_t) strtod(arg, NULL);
+		UINT32_TO_PAYLOAD(_c.command.payload.bytes, val);
 		break;
 
 	default:

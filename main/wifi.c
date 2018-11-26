@@ -32,6 +32,9 @@ _event_handler(void *ctx, system_event_t *event)
 {
 	switch(event->event_id) {
 	case SYSTEM_EVENT_STA_START:
+		ESP_LOGI(
+			__func__,
+			"start");
 		esp_wifi_connect();
 		break;
 
@@ -60,6 +63,9 @@ _event_handler(void *ctx, system_event_t *event)
 			break;
 
 	case SYSTEM_EVENT_STA_DISCONNECTED:
+		ESP_LOGI(
+			__func__,
+			"disconnected");
 		esp_wifi_connect();
 		xEventGroupClearBits(wifi_event_group, WIFI_CONNECTED_BIT);
 		break;

@@ -197,13 +197,12 @@ _state_measure(void)
 		}
 	}
 
-	len = memory_get_item(MEMORY_ITEM_MEASURE_MIN, (uint8_t *) n, sizeof(n));
-	if (sizeof(n) == len) {
-		n *= 60; // convert minutes to seconds
-	}
-	else {
-		n = 15 * 60; // TODO: default to 15 minutes?
-		printf("failed to read Peep measure delay, default to %d seconds\n", n);
+	if (r) {
+		len = memory_get_item(MEMORY_ITEM_MEASURE_SEC, (uint8_t *) &n, sizeof(n));
+		if (sizeof(n) != len) {
+			n = 15 * 60; // TODO: default to 15 minutes?
+			printf("failed to read Peep measure delay, default to %d seconds\n", n);
+		}
 	}
 
 	if (r) {
@@ -235,12 +234,15 @@ app_main()
 	}
 
 	if (PEEP_STATE_BLE_CONFIG == state) {
+		printf("PEEP_STATE_BLE_CONFIG\n");
 		_state_ble_config();
 	}
 	else if (PEEP_STATE_UART_CONFIG == state) {
+		printf("PEEP_STATE_UART_CONFIG\n");
 		_state_uart_config();
 	}
 	else if (PEEP_STATE_MEASURE == state) {
+		printf("PEEP_STATE_MEASURE\n");
 		_state_measure();
 	}
 

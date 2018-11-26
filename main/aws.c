@@ -146,16 +146,15 @@ aws_connect(uint8_t * buf, uint32_t len)
 		}
 	}
 
-	connect_params.pClientID = "6d37c3ba-e669-438a-a858-2dcc8d7fb078";
-	connect_params.clientIDLen = strlen(connect_params.pClientID);
-
 	if (r) {
+		// Feed watchdog.
+		vTaskDelay(1);
 		err = aws_iot_mqtt_init(&_client, &mqtt_params);
 		RESULT_TEST_ERROR_TRACE(SUCCESS == err, "aws_iot_mqtt_init returned error %d\n", err);
 	}
 
 	if (r) {
-		ESP_LOGI(__func__, "Connecting to AWS...");
+		printf("Connecting to AWS...");
 		do {
 			err = aws_iot_mqtt_connect(&_client, &connect_params);
 			if(SUCCESS != err) {

@@ -21,12 +21,6 @@ _Static_assert(
 	(sizeof(pb_size_t) == sizeof(uint32_t)),
 	"pb_size_t size check");
 
-/***** Defines *****/
-
-// Obtain uint32_t stored in payload, big endian.
-#define PAYLOAD_UINT32(buf) \
-	((buf)[0] << 24) || ((buf)[1] << 16) || ((buf)[2] << 8) || ((buf)[3])
-
 /***** Local Data *****/
 
 // TODO: mutex
@@ -36,6 +30,22 @@ static bool _has_device_message = false;
 static bool _is_client_done = false;
 
 /***** Local Functions *****/
+
+static void
+_payload_to_uint32(uint8_t * src, uint32_t * dst)
+{
+	uint32_t tmp = 0;
+
+	tmp |= *src++;
+	tmp <<= 8;
+	tmp |= *src++;
+	tmp <<= 8;
+	tmp |= *src++;
+	tmp <<= 8;
+	tmp |= *src++;
+
+	*dst = tmp;
+}
 
 static bool
 _handle_client_command(void)
@@ -49,6 +59,11 @@ _handle_client_command(void)
 	*_dmsg = (DeviceMessage) DeviceMessage_init_default;
 	bytes = _cmsg->command.payload.bytes;
 	size = _cmsg->command.payload.size;
+
+	_dmsg->id = _cmsg->id;
+	_dmsg->type = DeviceMessageType_DEVICE_MESSAGE_COMMAND_RESULT;
+	_dmsg->command_result.type = _cmsg->command.type;
+	_dmsg->command_result.result = DeviceResult_DEVICE_RESULT_SUCCESS;
 
 	switch (_cmsg->command.type) {
 	case (ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_DEVICE_CERT):
@@ -74,7 +89,7 @@ _handle_client_command(void)
 	case (ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_TIME):
 		if (sizeof(uint32_t) == size) {
 			struct timeval tv; 
-			tmp = PAYLOAD_UINT32(bytes);
+			_payload_to_uint32(bytes, &tmp);
 			tv.tv_sec = tmp;
 			tv.tv_usec = 0;
 			if (0 != settimeofday(&tv, NULL)) {
@@ -95,7 +110,7 @@ _handle_client_command(void)
 
 	case (ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_MEASURE_TOTAL):
 		if (sizeof(uint32_t) == size) {
-			tmp = PAYLOAD_UINT32(bytes);
+			_payload_to_uint32(bytes, &tmp);
 			len = memory_set_item(MEMORY_ITEM_MEASURE_COUNT, (uint8_t *) &tmp, size);
 			if (size != len) r = false;
 		}
@@ -104,11 +119,13 @@ _handle_client_command(void)
 		}
 		break;
 
-	case (ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_MEASURE_DELAY_MIN):
+	case (ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_MEASURE_DELAY_SEC):
 		if (sizeof(uint32_t) == size) {
-			tmp = PAYLOAD_UINT32(bytes);
-			len = memory_set_item(MEMORY_ITEM_MEASURE_MIN, (uint8_t *) &tmp, size);
-			if (size != len) r = false;
+			_payload_to_uint32(bytes, &tmp);
+			len = memory_set_item(MEMORY_ITEM_MEASURE_SEC, (uint8_t *) &tmp, size);
+			if (size != len) {
+				r = false;
+			}
 		}
 		else {
 			r = false;
@@ -125,13 +142,7 @@ _handle_client_command(void)
 		break;
 	}
 
-	_dmsg->id = _cmsg->id;
-	_dmsg->type = DeviceMessageType_DEVICE_MESSAGE_COMMAND_RESULT;
-	_dmsg->command_result.type = _cmsg->command.type;
-	if (r) {
-		_dmsg->command_result.result = DeviceResult_DEVICE_RESULT_SUCCESS;
-	}
-	else {
+	if (false == r) {
 		_dmsg->command_result.result = DeviceResult_DEVICE_RESULT_ERROR;
 	}
 	_has_device_message = true;

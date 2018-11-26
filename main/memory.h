@@ -19,7 +19,7 @@ enum memory_item {
 	MEMORY_ITEM_DEV_CERT,       // string
 	MEMORY_ITEM_DEV_PRIV_KEY,   // string
 	MEMORY_ITEM_MEASURE_COUNT,  // uint32_t
-	MEMORY_ITEM_MEASURE_MIN,    // uint32_t
+	MEMORY_ITEM_MEASURE_SEC,    // uint32_t
 };
 
 /***** Global Functions *****/

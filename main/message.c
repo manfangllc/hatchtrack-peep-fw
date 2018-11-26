@@ -104,10 +104,10 @@ _handle_client_command(void)
 		}
 		break;
 
-	case (ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_MEASURE_DELAY_MIN):
+	case (ClientCommandType_CLIENT_COMMAND_PAYLOAD_SET_MEASURE_DELAY_SEC):
 		if (sizeof(uint32_t) == size) {
 			tmp = PAYLOAD_UINT32(bytes);
-			len = memory_set_item(MEMORY_ITEM_MEASURE_MIN, (uint8_t *) &tmp, size);
+			len = memory_set_item(MEMORY_ITEM_MEASURE_SEC, (uint8_t *) &tmp, size);
 			if (size != len) r = false;
 		}
 		else {

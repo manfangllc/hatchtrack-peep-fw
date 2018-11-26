@@ -161,17 +161,14 @@ _state_measure(void)
 	}
 
 	if (r) {
-		printf("%d\n", __LINE__);
 		r = wifi_connect();
 	}
 
 	if (r) {
-		printf("%d\n", __LINE__);
 		r = aws_connect(_buffer, 8192);
 	}
 
 	if (r) {
-		printf("%d\n", __LINE__);
 		len = memory_get_item(MEMORY_ITEM_UUID, (uint8_t *) id, BUFFER_LENGTH / 2);
 		if (0 >= len) {
 			r = false;
@@ -182,7 +179,6 @@ _state_measure(void)
 	}
 
 	if (r) {
-		printf("%d\n", __LINE__);
 		sprintf(
 			msg,
 			"{\n"
@@ -202,7 +198,7 @@ _state_measure(void)
 	}
 
 	if (r) {
-		len = memory_get_item(MEMORY_ITEM_MEASURE_SEC, (uint8_t *) n, sizeof(n));
+		len = memory_get_item(MEMORY_ITEM_MEASURE_SEC, (uint8_t *) &n, sizeof(n));
 		if (sizeof(n) != len) {
 			n = 15 * 60; // TODO: default to 15 minutes?
 			printf("failed to read Peep measure delay, default to %d seconds\n", n);
@@ -233,20 +229,20 @@ app_main()
 
 	r = peep_get_state(&state);
 	if ((false == r) || (PEEP_STATE_UNKNOWN == state)) {
-		printf("%d\n", __LINE__);
 		state = PEEP_STATE_UART_CONFIG;
 		peep_set_state(state);
 	}
 
-	printf("state = %d\n", state);
-
 	if (PEEP_STATE_BLE_CONFIG == state) {
+		printf("PEEP_STATE_BLE_CONFIG\n");
 		_state_ble_config();
 	}
 	else if (PEEP_STATE_UART_CONFIG == state) {
+		printf("PEEP_STATE_UART_CONFIG\n");
 		_state_uart_config();
 	}
 	else if (PEEP_STATE_MEASURE == state) {
+		printf("PEEP_STATE_MEASURE\n");
 		_state_measure();
 	}
 

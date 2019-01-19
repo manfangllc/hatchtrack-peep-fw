@@ -2,10 +2,13 @@ export IDF_PATH := lib/esp-idf
 PROJECT_NAME := hatchtrack-peep-fw
 
 EXTRA_COMPONENT_DIRS := \
-	bme680 \
-	protobuf
+  bme680 \
+  peep \
+  protobuf
 
 include $(IDF_PATH)/make/project.mk
+
+CFLAGS += -DPB_BUFFER_ONLY -DPB_FIELD_32BIT=1
 
 distclean: clean
 	rm -f sdkconfig.old

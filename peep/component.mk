@@ -1,7 +1,7 @@
 COMPONENT_PRIV_INCLUDEDIRS := \
 	. \
 	../bme680 \
-	../peep \
+	../main \
 	../protobuf \
 	../lib/hatchtrack-peep-protobuf/header
 

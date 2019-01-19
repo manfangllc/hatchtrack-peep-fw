@@ -148,7 +148,7 @@ aws_connect(uint8_t * buf, uint32_t len)
 
 	if (r) {
 		// Feed watchdog.
-		vTaskDelay(1);
+		vTaskDelay(20 / portTICK_RATE_MS);
 		err = aws_iot_mqtt_init(&_client, &mqtt_params);
 		RESULT_TEST_ERROR_TRACE(SUCCESS == err, "aws_iot_mqtt_init returned error %d\n", err);
 	}

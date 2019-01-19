@@ -153,6 +153,7 @@ _state_measure(void)
 		len = memory_get_item(MEMORY_ITEM_MEASURE_COUNT, (uint8_t *) &n, sizeof(n));
 		if (sizeof(n) == len) {
 			n -= 1;
+			printf("[%s] : %d measurements left\n", __func__, n);
 			memory_set_item(MEMORY_ITEM_MEASURE_COUNT, (uint8_t *) &n, sizeof(n));
 			if (0 == n) {
 				peep_set_state(PEEP_STATE_UART_CONFIG);
@@ -209,7 +210,7 @@ _state_measure(void)
 		_deep_sleep(n);
 	}
 	else {
-		peep_set_state(PEEP_STATE_UART_CONFIG);
+		//peep_set_state(PEEP_STATE_UART_CONFIG);
 		_deep_sleep(0);
 	}
 }

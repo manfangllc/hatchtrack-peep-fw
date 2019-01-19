@@ -27,6 +27,6 @@ wifi_disconnect(void);
 
 extern bool
 wifi_publish_results(float temperature, float humidity, float pressure,
-	float quality);
+  float quality);
 
 #endif

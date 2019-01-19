@@ -39,7 +39,7 @@ _timer_init(void)
   timer_conf.timer_num = _PWM_LEDC_TIMER;
 
   err = ledc_timer_config(&timer_conf);
-  RESULT_TEST_ERROR_TRACE(err == ESP_OK, "failed");
+  RESULT_TEST(err == ESP_OK, "failed");
 }
 
 static void
@@ -55,7 +55,7 @@ _led_off(uint32_t pin)
   io_conf.pull_up_en = 1;
 
   err = gpio_config(&io_conf);
-  RESULT_TEST_ERROR_TRACE(err == ESP_OK, "failed");
+  RESULT_TEST(err == ESP_OK, "failed");
 }
 
 static void
@@ -72,7 +72,7 @@ _led_on(uint32_t pin, ledc_channel_t channel)
   ledc_conf.speed_mode = LEDC_HIGH_SPEED_MODE;
 
   err = ledc_channel_config(&ledc_conf);
-  RESULT_TEST_ERROR_TRACE(err == ESP_OK, "failed");
+  RESULT_TEST(err == ESP_OK, "failed");
 }
 
 /***** Global Functions *****/
@@ -117,3 +117,9 @@ led_blue(bool is_on)
     _led_off(_GPIO_LED_BLUE);
   }
 }
+
+/***** Unit Tests *****/
+
+#ifdef PEEP_UNIT_TEST_BUILD
+
+#endif

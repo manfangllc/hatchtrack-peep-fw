@@ -1,0 +1,8 @@
+COMPONENT_SRCDIRS:= \
+  ./icm20602/src
+
+COMPONENT_PRIV_INCLUDEDIRS:=\
+  ./icm20602/inc
+
+COMPONENT_OBJS := \
+  ./icm20602/src/icm20602.o

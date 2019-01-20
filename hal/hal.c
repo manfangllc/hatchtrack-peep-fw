@@ -2,12 +2,13 @@
 
 #include "system.h"
 #include "bme680.h"
+#include "icm20602.h"
 #include "driver/i2c.h"
 
 /***** Defines *****/
 
-#define I2C_SDA_PIN 16
-#define I2C_SCL_PIN 17
+#define I2C_SDA_PIN 32
+#define I2C_SCL_PIN 33
 #define I2C_CLK_FREQ_HZ 100000
 
 #define ICM20689_I2C_ADDR (0x68)
@@ -103,18 +104,11 @@ _delay(uint32_t delay_ms)
   vTaskDelay(rtos_ticks);
 }
 
-/***** Global Functions *****/
-
-bool
-sensor_init(void)
+static bool
+_bme680_init(void)
 {
   int status = 0;
   bool r = true;
-
-  if (r) {
-    r = _i2c_master_init();
-    RESULT_TEST(r, "failed to initialize i2c interface!\n");
-  }
 
   if (r) {
     _bme680.dev_id = BME680_I2C_ADDR_PRIMARY;
@@ -130,6 +124,7 @@ sensor_init(void)
   }
 
   if (r) {
+    // These settings stay constant through our application.
     _bme680.tph_sett.os_temp = BME680_OS_8X;
     _bme680.tph_sett.os_hum = BME680_OS_2X;
     _bme680.tph_sett.os_pres = BME680_OS_4X;
@@ -143,8 +138,28 @@ sensor_init(void)
   return r;
 }
 
+/***** Global Functions *****/
+
 bool
-sensor_measure(float * p_temperature, float * p_humidity)
+hal_init(void)
+{
+
+  bool r = true;
+
+  if (r) {
+    r = _i2c_master_init();
+    RESULT_TEST(r, "failed to initialize i2c interface!\n");
+  }
+
+  if (r) {
+    _bme680_init();
+  }
+
+  return r;
+}
+
+bool
+hal_measure_temperature_humdity(float * p_temperature, float * p_humidity)
 {
   struct bme680_field_data data;
   uint16_t measure_delay = 0;
@@ -181,14 +196,14 @@ sensor_measure(float * p_temperature, float * p_humidity)
 
   if (r) {
     bme680_get_profile_dur(&measure_delay, &_bme680);
-    printf("measure delay = %d\n", measure_delay);
+    LOGI("measure delay = %d\n", measure_delay);
     _delay(measure_delay * 2);
   }
 
   if (r) {
     status = bme680_get_sensor_data(&data, &_bme680);
     if (0 != status) {
-      printf("failed to read data (%d)!\n", status);
+      LOGE("failed to read data (%d)!\n", status);
       r = false;
     }
   }
@@ -199,7 +214,7 @@ sensor_measure(float * p_temperature, float * p_humidity)
     pressure = data.pressure;
     gas_resistance = data.gas_resistance;
 
-    printf(
+    LOGI(
       "t=%f\nh=%f\np=%f\ng=%f\n",
       temperature,
       humidity,
@@ -212,3 +227,21 @@ sensor_measure(float * p_temperature, float * p_humidity)
 
   return r;
 }
+
+/***** Unit Tests *****/
+
+#ifdef PEEP_UNIT_TEST_BUILD
+TEST_CASE("HAL BME680", "[hal.c]")
+{
+  bool r = true;
+
+  printf("* Initializing BME680.\n");
+  r = hal_init();
+  TEST_ASSERT(r);
+
+  printf("* Performing measurement.\n");
+  float t, h;
+  r = sensor_measure(&t, &h);
+  TEST_ASSERT(r);
+}
+#endif

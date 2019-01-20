@@ -7,3 +7,6 @@
 [submodule "lib/nanopb"]
 	path = lib/nanopb
 	url = https://github.com/nanopb/nanopb.git
+[submodule "icm20602/icm20602"]
+	path = icm20602/icm20602
+	url = https://github.com/mreutman/icm20602.git

@@ -31,6 +31,8 @@
   ESP_LOG_LEVEL_LOCAL(ESP_LOG_WARNING, __func__, format, ##__VA_ARGS__)
 #define LOGI(format, ...) \
   ESP_LOG_LEVEL_LOCAL(ESP_LOG_INFO, __func__, format, ##__VA_ARGS__)
+#define LOGD(format, ...) \
+  ESP_LOG_LEVEL_LOCAL(ESP_LOG_DEBUG, __func__, format, ##__VA_ARGS__)
 
 #define RESULT_TEST(cond, format, ...) \
   if (!(cond)) { \

@@ -1,7 +1,8 @@
 COMPONENT_PRIV_INCLUDEDIRS := \
   . \
   ../bme680 \
-  ../icm20602
+  ../icm20602/icm20602/inc \
+  ../peep
 
 ifeq ($(PROJECT_NAME),hatchtrack-peep-unit-test-fw)
   COMPONENT_PRIV_INCLUDEDIRS += ../test/main

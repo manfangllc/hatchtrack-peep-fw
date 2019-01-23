@@ -7,16 +7,19 @@
 
 /***** Defines *****/
 
-#define I2C_SDA_PIN 32
-#define I2C_SCL_PIN 33
-#define I2C_CLK_FREQ_HZ 100000
+#define _I2C_SDA_PIN 32
+#define _I2C_SCL_PIN 33
+#define _I2C_CLK_FREQ_HZ 100000
 
-#define ICM20689_I2C_ADDR (0x68)
+#define _I2C_ADDR_BME680 (BME680_I2C_ADDR_PRIMARY)
+#define _I2C_ADDR_ICM20602 (0x69)
 
 /***** Local Data *****/
 
 static struct bme680_dev _bme680;
+static struct icm20602_dev _icm20602;
 static i2c_port_t _i2c = I2C_NUM_0;
+static SemaphoreHandle_t _lock = NULL;
 
 /***** Local Functions *****/
 
@@ -77,11 +80,11 @@ _i2c_master_init(void)
   esp_err_t r = ESP_OK;
 
   conf.mode = I2C_MODE_MASTER;
-  conf.sda_io_num = I2C_SDA_PIN;
-  conf.scl_io_num = I2C_SCL_PIN;
+  conf.sda_io_num = _I2C_SDA_PIN;
+  conf.scl_io_num = _I2C_SCL_PIN;
   conf.sda_pullup_en = GPIO_PULLUP_DISABLE;
   conf.scl_pullup_en = GPIO_PULLUP_DISABLE;
-  conf.master.clk_speed = I2C_CLK_FREQ_HZ;
+  conf.master.clk_speed = _I2C_CLK_FREQ_HZ;
 
   if (ESP_OK == r) {
     r = i2c_param_config(_i2c, &conf);
@@ -94,8 +97,32 @@ _i2c_master_init(void)
   return (ESP_OK == r) ? true : false;
 }
 
+static bool
+_i2c_master_free(void)
+{
+  esp_err_t r = ESP_OK;
+
+  r = i2c_driver_delete(_i2c);
+
+  return (ESP_OK == r) ? true : false;
+}
+
 static void
-_delay(uint32_t delay_ms)
+_mutex_lock(uint8_t id)
+{
+  (void) id;
+  xSemaphoreTake(_lock, portMAX_DELAY);
+}
+
+static void
+_mutex_unlock(uint8_t id)
+{
+  (void) id;
+  xSemaphoreGive(_lock);
+}
+
+static void
+_sleep(uint32_t delay_ms)
 {
   TickType_t rtos_ticks = delay_ms / portTICK_PERIOD_MS;
   if (0 == rtos_ticks) {
@@ -111,11 +138,11 @@ _bme680_init(void)
   bool r = true;
 
   if (r) {
-    _bme680.dev_id = BME680_I2C_ADDR_PRIMARY;
+    _bme680.dev_id = _I2C_ADDR_BME680;
     _bme680.intf = BME680_I2C_INTF;
     _bme680.read = &_i2c_read_reg;
     _bme680.write = &_i2c_write_reg;
-    _bme680.delay_ms = &_delay;
+    _bme680.delay_ms = &_sleep;
 
     status = bme680_init(&_bme680);
     if (0 != status) {
@@ -138,6 +165,32 @@ _bme680_init(void)
   return r;
 }
 
+static bool
+_icm20602_init(void)
+{
+  int status = 0;
+  bool r = true;
+
+  _icm20602 = (struct icm20602_dev) ICM20602_DEFAULT_INIT();
+
+  _icm20602.id = _I2C_ADDR_ICM20602;
+  _icm20602.hal_wr = _i2c_write_reg;
+  _icm20602.hal_rd = _i2c_read_reg;
+  _icm20602.hal_sleep = _sleep;
+  _icm20602.mutex_lock = _mutex_lock;
+  _icm20602.mutex_unlock = _mutex_unlock;
+
+  if (r) {
+    _lock = xSemaphoreCreateMutex();
+  }
+
+  status = icm20602_init(&_icm20602);
+  if (0 != status) {
+    r = false;
+  }
+  return r;
+}
+
 /***** Global Functions *****/
 
 bool
@@ -152,14 +205,18 @@ hal_init(void)
   }
 
   if (r) {
-    _bme680_init();
+    r = _bme680_init();
+  }
+
+  if (r) {
+    r = _icm20602_init();
   }
 
   return r;
 }
 
 bool
-hal_measure_temperature_humdity(float * p_temperature, float * p_humidity)
+hal_read_temperature_humdity(float * p_temperature, float * p_humidity)
 {
   struct bme680_field_data data;
   uint16_t measure_delay = 0;
@@ -197,7 +254,7 @@ hal_measure_temperature_humdity(float * p_temperature, float * p_humidity)
   if (r) {
     bme680_get_profile_dur(&measure_delay, &_bme680);
     LOGI("measure delay = %d\n", measure_delay);
-    _delay(measure_delay * 2);
+    _sleep(measure_delay * 2);
   }
 
   if (r) {
@@ -228,6 +285,16 @@ hal_measure_temperature_humdity(float * p_temperature, float * p_humidity)
   return r;
 }
 
+bool
+hal_read_accel(float * p_gx, float * p_gy, float * p_gz)
+{
+  int8_t status = 0;
+
+  status = icm20602_read_accel(&_icm20602, p_gx, p_gy, p_gz);
+
+  return (0 == status) ? true : false;
+}
+
 /***** Unit Tests *****/
 
 #ifdef PEEP_UNIT_TEST_BUILD
@@ -235,13 +302,45 @@ TEST_CASE("HAL BME680", "[hal.c]")
 {
   bool r = true;
 
-  printf("* Initializing BME680.\n");
-  r = hal_init();
+  printf("* Initializing I2C interface.\n");
+  r = _i2c_master_init();
   TEST_ASSERT(r);
 
-  printf("* Performing measurement.\n");
+  printf("* Initializing BME680.\n");
+  r = _bme680_init();
+  TEST_ASSERT(r);
+
+  printf("* Performing measurement... ");
   float t, h;
-  r = sensor_measure(&t, &h);
+  r = hal_read_temperature_humdity(&t, &h);
+  TEST_ASSERT(r);
+  printf("T=%f, H=%f\n", t, h);
+
+  printf("* Free I2C interface.\n");
+  r = _i2c_master_free();
+  TEST_ASSERT(r);
+}
+
+TEST_CASE("HAL ICM20602", "[hal.c]")
+{
+  bool r = true;
+
+  printf("* Initializing I2C interface.\n");
+  r = _i2c_master_init();
+  TEST_ASSERT(r);
+
+  printf("* Initializing ICM20602.\n");
+  r = _icm20602_init();
+  TEST_ASSERT(r);
+
+  printf("* Performing measurement... \n");
+  float x, y, z;
+  r = hal_read_accel(&x, &y, &z);
+  TEST_ASSERT(r);
+  printf("X=%f, Y=%f, Z=%f\n", x, y, z);
+
+  printf("* Free I2C interface.\n");
+  r = _i2c_master_free();
   TEST_ASSERT(r);
 }
 #endif

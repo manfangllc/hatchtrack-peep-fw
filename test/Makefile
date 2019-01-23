@@ -4,6 +4,8 @@ PROJECT_NAME := hatchtrack-peep-unit-test-fw
 
 EXTRA_COMPONENT_DIRS := \
   $(realpath ..)/bme680 \
+  $(realpath ..)/icm20602 \
+  $(realpath ..)/hal \
   $(realpath ..)/peep \
   $(realpath ..)/protobuf
 

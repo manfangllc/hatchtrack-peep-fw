@@ -12,7 +12,7 @@
 #include "uart_server.h"
 #include "memory.h"
 #include "state.h"
-#include "sensor.h"
+#include "hal.h"
 
 /***** Defines *****/
 
@@ -142,11 +142,11 @@ _state_measure(void)
   bool r = true;
 
   if (r) {
-    r = sensor_init();
+    r = hal_init();
   }
 
   if (r) {
-    r = sensor_measure(&temperature, &humidity);
+    r = hal_read_temperature_humdity(&temperature, &humidity);
   }
 
   if (r) {

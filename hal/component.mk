@@ -1,6 +1,6 @@
 COMPONENT_PRIV_INCLUDEDIRS := \
   . \
-  ../bme680 \
+  ../bme680/BME680_driver \
   ../icm20602/icm20602/inc \
   ../peep
 

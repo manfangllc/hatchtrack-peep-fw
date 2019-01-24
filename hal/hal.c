@@ -188,6 +188,7 @@ _icm20602_init(void)
   if (0 != status) {
     r = false;
   }
+
   return r;
 }
 
@@ -295,6 +296,25 @@ hal_read_accel(float * p_gx, float * p_gy, float * p_gz)
   return (0 == status) ? true : false;
 }
 
+bool
+hal_read_accel_gyro(float * p_ax, float * p_ay, float * p_az, float * p_gx,
+  float * p_gy, float * p_gz)
+{
+  int8_t status = 0;
+  float t = 0.0;
+
+  status = icm20602_read_data(&_icm20602,
+                              p_ax,
+                              p_ay,
+                              p_az,
+                              p_gx,
+                              p_gy,
+                              p_gz,
+                              &t);
+
+  return (0 == status) ? true : false;
+}
+
 /***** Unit Tests *****/
 
 #ifdef PEEP_UNIT_TEST_BUILD
@@ -310,11 +330,11 @@ TEST_CASE("HAL BME680", "[hal.c]")
   r = _bme680_init();
   TEST_ASSERT(r);
 
-  printf("* Performing measurement... ");
+  printf("* Performing measurement...\n");
   float t, h;
   r = hal_read_temperature_humdity(&t, &h);
   TEST_ASSERT(r);
-  printf("T=%f, H=%f\n", t, h);
+  printf("\tT=%f, H=%f\n", t, h);
 
   printf("* Free I2C interface.\n");
   r = _i2c_master_free();
@@ -333,11 +353,15 @@ TEST_CASE("HAL ICM20602", "[hal.c]")
   r = _icm20602_init();
   TEST_ASSERT(r);
 
+  printf("* Sleep briefly to allow new data to be generated.\n");
+  vTaskDelay(1000 / portTICK_PERIOD_MS);
+
   printf("* Performing measurement... \n");
-  float x, y, z;
-  r = hal_read_accel(&x, &y, &z);
+  float ax, ay, az, gx, gy, gz;
+  r = hal_read_accel_gyro(&ax, &ay, &az, &gx, &gy, &gz);
   TEST_ASSERT(r);
-  printf("X=%f, Y=%f, Z=%f\n", x, y, z);
+  printf("\tAX=%f, AY=%f, AZ=%f\n", ax, ay, az);
+  printf("\tGX=%f, GY=%f, GZ=%f\n", gx, gy, gz);
 
   printf("* Free I2C interface.\n");
   r = _i2c_master_free();

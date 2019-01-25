@@ -8,10 +8,6 @@
 
 /***** Defines *****/
 
-#define _PWM_PIEZO_PIN 18
-#define _PWM_RESOLUTION (LEDC_TIMER_16_BIT)
-#define _PWM_FREQ_HZ 1000
-
 #define _I2C_SDA_PIN 32
 #define _I2C_SCL_PIN 33
 #define _I2C_CLK_FREQ_HZ 100000
@@ -19,17 +15,38 @@
 #define _I2C_ADDR_BME680 (BME680_I2C_ADDR_PRIMARY)
 #define _I2C_ADDR_ICM20602 (0x69)
 
+#define _PIN_NUM_BTN 0
+
+#define _PWM_PIEZO_PIN 18
+#define _PWM_RESOLUTION (LEDC_TIMER_16_BIT)
+#define _PWM_FREQ_HZ 1000
+
+
 /***** Local Data *****/
 
 static struct bme680_dev _bme680;
 static struct icm20602_dev _icm20602;
 static i2c_port_t _i2c = I2C_NUM_0;
 static SemaphoreHandle_t _lock = NULL;
+static QueueHandle_t _push_button_queue;
 
 static const ledc_mode_t _speed_mode = LEDC_HIGH_SPEED_MODE;
 static const ledc_channel_t _channel = LEDC_CHANNEL_0;
 
 /***** Local Functions *****/
+
+static void IRAM_ATTR
+_push_button_isr(void * arg)
+{
+  BaseType_t xTaskWoke = pdFALSE;
+  bool is_pressed = (0 == gpio_get_level(_PIN_NUM_BTN)) ? true : false;
+
+  xQueueSendFromISR(_push_button_queue, &is_pressed, &xTaskWoke);
+
+  if (pdTRUE == xTaskWoke) {
+    portYIELD_FROM_ISR();
+  }
+}
 
 int8_t
 _i2c_write_reg(uint8_t slave_addr, uint8_t reg, uint8_t * buf, uint16_t len)
@@ -272,6 +289,28 @@ _piezo_off(void)
   return (ESP_OK == err) ? true : false;
 }
 
+static bool
+_push_button_init(void)
+{
+  gpio_config_t io_conf;
+  esp_err_t err = ESP_OK;
+
+  _push_button_queue = xQueueCreate(4, sizeof(bool));
+
+  //hook isr handler for gpio pins
+  gpio_isr_handler_add(_PIN_NUM_BTN, _push_button_isr, (void*) _PIN_NUM_BTN);
+
+  // interrupt of rising edge
+  io_conf.pin_bit_mask = ((uint64_t) 1) << _PIN_NUM_BTN;
+  io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+  io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
+  io_conf.intr_type = GPIO_INTR_NEGEDGE;
+  io_conf.mode = GPIO_MODE_INPUT;
+  err = gpio_config(&io_conf);
+
+  return (ESP_OK == err) ? true : false;
+}
+
 /***** Global Functions *****/
 
 bool
@@ -465,5 +504,20 @@ TEST_CASE("HAL piezo", "[hal.c]")
   printf("* Turning off piezo.\n");
   r = _piezo_off();
   TEST_ASSERT(r);
+}
+
+TEST_CASE("HAL push button", "[hal.c]")
+{
+  BaseType_t status = pdTRUE;
+  bool is_pressed = false;
+  bool r = true;
+
+  printf("* Initializing push button interface.\n");
+  r = _push_button_init();
+  TEST_ASSERT(r);
+
+  printf("* Please engage the push button.\n");
+  status = xQueueReceive(_push_button_queue, &is_pressed, portMAX_DELAY);
+  TEST_ASSERT(pdTRUE == status);
 }
 #endif

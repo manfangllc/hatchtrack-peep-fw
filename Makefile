@@ -5,8 +5,10 @@ EXTRA_COMPONENT_DIRS := \
   bme680 \
   icm20602 \
   hal \
+  iot \
   peep \
-  protobuf
+  protobuf \
+  wifi
 
 include $(IDF_PATH)/make/project.mk
 

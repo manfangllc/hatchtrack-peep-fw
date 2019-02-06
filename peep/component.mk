@@ -3,6 +3,7 @@ COMPONENT_PRIV_INCLUDEDIRS := \
   ../bme680 \
   ../main \
   ../protobuf \
+  ../wifi \
   ../lib/hatchtrack-peep-protobuf/header
 
 ifeq ($(PROJECT_NAME),hatchtrack-peep-unit-test-fw)

@@ -1,0 +1,5 @@
+COMPONENT_PRIV_INCLUDEDIRS := \
+  . \
+  ../main
+
+COMPONENT_EMBED_TXTFILES := iot_mqtt.pem

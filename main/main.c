@@ -17,15 +17,23 @@
 
 /***** Defines *****/
 
+// Comment this out to enter deep sleep when not active.
+#define _NO_DEEP_SLEEP 1
 #define _MEASURE_INTERVAL_SEC 15
-#define _WIFI_SSID ("icxc-nika")
-#define _WIFI_PASSWORD ("November141990")
-
 #define _BUFFER_LEN 8192
 
 /***** Local Data *****/
 
 static uint8_t _buffer[_BUFFER_LEN];
+
+extern const uint8_t _uuid_start[]   asm("_binary_uuid_txt_start");
+extern const uint8_t _uuid_end[]   asm("_binary_uuid_txt_end");
+
+extern const uint8_t _ssid_start[]   asm("_binary_wifi_ssid_txt_start");
+extern const uint8_t _ssid_end[]   asm("_binary_wifi_ssid_txt_end");
+
+extern const uint8_t _pass_start[]   asm("_binary_wifi_pass_txt_start");
+extern const uint8_t _pass_end[]   asm("_binary_wifi_pass_txt_end");
 
 /***** Local Functions *****/
 
@@ -47,8 +55,8 @@ _deep_sleep(uint32_t sec)
 static void
 _measure_task(void * arg)
 {
-  char * ssid = _WIFI_SSID;
-  char * password = _WIFI_PASSWORD;
+  char * ssid = (char *) _ssid_start;
+  char * password = (char *) _pass_start;
   char * msg = (char *) &_buffer[0];
   float temperature = 0.0;
   float humidity = 0.0;
@@ -61,15 +69,47 @@ _measure_task(void * arg)
   }
 
   if (r) {
-    r = hal_read_temperature_humdity(&temperature, &humidity);
-  }
-
-  if (r) {
     r = wifi_connect(ssid, password);
   }
 
   if (r) {
     r = iot_mqtt_init();
+  }
+
+#ifdef _NO_DEEP_SLEEP
+  while (r) {
+    uint32_t n = 0;
+
+    if (r) {
+      r = hal_read_temperature_humdity(&temperature, &humidity);
+    }
+
+    if (r) {
+      sprintf(
+        msg,
+        "{\n"
+        "\"hatch\": \"%s\",\n"
+        "\"time\": %d,\n"
+        "\"temperature\": %f,\n"
+        "\"humidity\": %f\n"
+        "}",
+        (const char *) _uuid_start,
+        (int) time(NULL),
+        temperature,
+        humidity);
+
+        r = iot_mqtt_publish("/test", msg, true);
+    }
+
+    if (r) {
+      LOGI("iteration %d\n", ++n);
+      vTaskDelay((_MEASURE_INTERVAL_SEC * 1000) / portTICK_PERIOD_MS);
+    }
+  }
+
+#else
+  if (r) {
+    r = hal_read_temperature_humdity(&temperature, &humidity);
   }
 
   if (r) {
@@ -81,13 +121,14 @@ _measure_task(void * arg)
       "\"temperature\": %f,\n"
       "\"humidity\": %f\n"
       "}",
-      "hello",
+      (const char *) _uuid_start,
       (int) time(NULL),
       temperature,
       humidity);
 
       r = iot_mqtt_publish("/test", msg, true);
   }
+#endif
 
   _deep_sleep(_MEASURE_INTERVAL_SEC);
 }

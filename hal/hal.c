@@ -8,8 +8,8 @@
 
 /***** Defines *****/
 
-#define _I2C_SDA_PIN 32
-#define _I2C_SCL_PIN 33
+#define _I2C_SDA_PIN 16
+#define _I2C_SCL_PIN 17
 #define _I2C_CLK_FREQ_HZ 100000
 
 #define _I2C_ADDR_BME680 (BME680_I2C_ADDR_PRIMARY)
@@ -326,11 +326,14 @@ hal_init(void)
 
   if (r) {
     r = _bme680_init();
+    if (false == r) {
+      LOGI("Failed to initialize BME680\n");
+    }
   }
 
-  if (r) {
-    r = _icm20602_init();
-  }
+  //if (r) {
+    //r = _icm20602_init();
+  //}
 
   return r;
 }

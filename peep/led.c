@@ -9,9 +9,8 @@
 /***** Defines *****/
 
 #define _GPIO_LED_RED 5
-#define _GPIO_LED_GREEN 18
-#define _GPIO_LED_BLUE 19
-
+#define _GPIO_LED_GREEN 17
+#define _GPIO_LED_BLUE 16
 
 #define _PWM_RESOLUTION (LEDC_TIMER_16_BIT)
 #define _PWM_FREQ_HZ 100
@@ -61,18 +60,32 @@ _led_off(uint32_t pin)
 static void
 _led_on(uint32_t pin, ledc_channel_t channel)
 {
-  ledc_channel_config_t ledc_conf;
+  //ledc_channel_config_t ledc_conf;
+  //esp_err_t err;
+
+  //ledc_conf.timer_sel = _PWM_LEDC_TIMER;
+  //ledc_conf.channel = channel;
+  ////ledc_conf.duty = 60535;
+  //ledc_conf.duty = 10;
+  //ledc_conf.gpio_num = pin;
+  //ledc_conf.intr_type = LEDC_INTR_DISABLE;
+  //ledc_conf.speed_mode = LEDC_HIGH_SPEED_MODE;
+
+  //err = ledc_channel_config(&ledc_conf);
+  //RESULT_TEST(err == ESP_OK, "failed");
+  gpio_config_t io_conf;
   esp_err_t err;
 
-  ledc_conf.timer_sel = _PWM_LEDC_TIMER;
-  ledc_conf.channel = channel;
-  ledc_conf.duty = 60535;
-  ledc_conf.gpio_num = pin;
-  ledc_conf.intr_type = LEDC_INTR_DISABLE;
-  ledc_conf.speed_mode = LEDC_HIGH_SPEED_MODE;
+  io_conf.intr_type = GPIO_PIN_INTR_DISABLE;
+  io_conf.mode = GPIO_MODE_OUTPUT;
+  io_conf.pin_bit_mask = ((uint64_t) 1) << pin;
+  io_conf.pull_down_en = 0;
+  io_conf.pull_up_en = 0;
 
-  err = ledc_channel_config(&ledc_conf);
+  err = gpio_config(&io_conf);
   RESULT_TEST(err == ESP_OK, "failed");
+
+  gpio_set_level(pin, 0);
 }
 
 /***** Global Functions *****/
@@ -80,7 +93,12 @@ _led_on(uint32_t pin, ledc_channel_t channel)
 bool
 led_init(void)
 {
-  _timer_init();
+  // TODO: Do we want to PWM the LEDs?
+  //_timer_init();
+
+  led_red(false);
+  led_green(false);
+  led_blue(false);
 
   return true;
 }
@@ -121,5 +139,32 @@ led_blue(bool is_on)
 /***** Unit Tests *****/
 
 #ifdef PEEP_UNIT_TEST_BUILD
+#if 0
+TEST_CASE("LED test", "[led.c]")
+{
+  bool r = true;
 
+  printf("* Initializing LED driver.\n");
+  r = led_init();
+  TEST_ASSERT(r);
+
+  printf("* Turning on green LED.\n");
+  led_green(true);
+  r = unit_test_prompt_yn("* Did the green LED turn on?");
+  TEST_ASSERT(r);
+  led_green(false);
+
+  printf("* Turning on red LED.\n");
+  led_red(true);
+  r = unit_test_prompt_yn("* Did the red LED turn on?");
+  TEST_ASSERT(r);
+  led_red(false);
+
+  printf("* Turning on blue LED.\n");
+  led_blue(true);
+  r = unit_test_prompt_yn("* Did the blue LED turn on?");
+  TEST_ASSERT(r);
+  led_blue(false);
+}
+#endif
 #endif

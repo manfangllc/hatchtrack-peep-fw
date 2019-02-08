@@ -1,10 +1,9 @@
 COMPONENT_PRIV_INCLUDEDIRS := \
   . \
-  ../bme680 \
-  ../main \
-  ../protobuf \
-  ../wifi \
-  ../lib/hatchtrack-peep-protobuf/header
+  ../bme680/BME680_driver \
+  ../icm20602/icm20602/inc \
+  ../peep \
+  ../main
 
 ifeq ($(PROJECT_NAME),hatchtrack-peep-unit-test-fw)
   COMPONENT_PRIV_INCLUDEDIRS += ../test/main

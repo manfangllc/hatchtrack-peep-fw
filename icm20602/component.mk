@@ -1,8 +1,8 @@
 COMPONENT_SRCDIRS:= \
-  ./BME680_driver
+  ./icm20602/src
 
 COMPONENT_PRIV_INCLUDEDIRS:=\
-  ./BME680_driver
+  ./icm20602/inc
 
 COMPONENT_OBJS := \
-  ./BME680_driver/bme680.o
+  ./icm20602/src/icm20602.o

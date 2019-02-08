@@ -77,9 +77,9 @@ _measure_task(void * arg)
   }
 
 #ifdef _NO_DEEP_SLEEP
-  while (r) {
-    uint32_t n = 0;
+  uint32_t n = 0;
 
+  while (r) {
     if (r) {
       r = hal_read_temperature_humdity(&temperature, &humidity);
     }
@@ -98,11 +98,12 @@ _measure_task(void * arg)
         temperature,
         humidity);
 
-        r = iot_mqtt_publish("/test", msg, true);
+        r = iot_mqtt_publish("hatchtrack/data/put", msg, false);
     }
 
     if (r) {
-      LOGI("iteration %d\n", ++n);
+      n++;
+      LOGI("iteration %d\n", n);
       vTaskDelay((_MEASURE_INTERVAL_SEC * 1000) / portTICK_PERIOD_MS);
     }
   }

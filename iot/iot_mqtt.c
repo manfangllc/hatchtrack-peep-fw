@@ -27,6 +27,8 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
 {
   esp_mqtt_client_handle_t client = event->client;
 
+  (void) client;
+
   // your_context_t *context = event->context;
   switch (event->event_id) {
     case MQTT_EVENT_CONNECTED:
@@ -73,35 +75,44 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
 bool
 iot_mqtt_init(void)
 {
+  esp_mqtt_client_config_t mqtt_cfg;
   const TickType_t connect_timeout = 60000 / portTICK_PERIOD_MS;
   EventBits_t bits = 0;
+  esp_err_t err = ESP_OK;
   bool r = true;
-  const esp_mqtt_client_config_t mqtt_cfg = {
-    .uri = _BROKER_URI,
-    .event_handle = mqtt_event_handler,
-    .cert_pem = (const char *) _pem_start,
-  };
 
+  memset(&mqtt_cfg, 0, sizeof(esp_mqtt_client_config_t));
+
+  mqtt_cfg.uri = _BROKER_URI;
+  mqtt_cfg.event_handle = mqtt_event_handler;
+  mqtt_cfg.cert_pem = (const char *) _pem_start;
+  mqtt_cfg.disable_auto_reconnect = false;
   _mqtt_event_group = xEventGroupCreate();
-
-  LOGI("[APP] Free memory: %d bytes", esp_get_free_heap_size());
   _client = esp_mqtt_client_init(&mqtt_cfg);
-  esp_mqtt_client_start(_client);
 
-  /* Wait for WiFI to show as connected */
-  bits = xEventGroupWaitBits(
-    _mqtt_event_group,
-    _MQTT_CONNECTED_BIT,
-    false,
-    true,
-    connect_timeout);
-
-  if (bits & _MQTT_CONNECTED_BIT) {
-    LOGI("Successfully connected to %s\n", _BROKER_URI);
+  if (r) {
+    err = esp_mqtt_client_start(_client);
+    if (ESP_OK != err) {
+      r = false;
+    }
   }
-  else {
-    LOGI("Error connecting to %s\n", _BROKER_URI);
-    r = false;
+
+  if (r) {
+    /* Wait for WiFI to show as connected */
+    bits = xEventGroupWaitBits(
+      _mqtt_event_group,
+      _MQTT_CONNECTED_BIT,
+      false,
+      true,
+      connect_timeout);
+
+    if (bits & _MQTT_CONNECTED_BIT) {
+      LOGI("Successfully connected to %s\n", _BROKER_URI);
+    }
+    else {
+      LOGI("Error connecting to %s\n", _BROKER_URI);
+      r = false;
+    }
   }
 
   return r;

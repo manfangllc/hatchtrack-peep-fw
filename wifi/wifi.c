@@ -5,13 +5,11 @@
 #include <sys/time.h>
 
 #include "wifi.h"
-#include "memory.h"
 #include "system.h"
 #include "freertos/event_groups.h"
 #include "esp_wifi.h"
 #include "esp_event_loop.h"
 #include "lwip/err.h"
-//#include "apps/sntp/sntp.h"
 
 /***** Local Data *****/
 
@@ -22,8 +20,6 @@ static EventGroupHandle_t wifi_event_group = NULL;
    but we only care about one event - are we connected
    to the AP with an IP? */
 const int WIFI_CONNECTED_BIT = BIT0;
-
-//static wifi_ap_record_t * _ap_list = NULL;
 
 /***** Local Functions *****/
 
@@ -76,43 +72,10 @@ _event_handler(void *ctx, system_event_t *event)
   return ESP_OK;
 }
 
-//static bool
-//_init_time(void)
-//{
-   //wait for time to be set
-  //time_t now = 0;
-  //struct tm timeinfo = { 0 };
-  //const int retry_count = 10;
-  //int retry = 0;
-
-  //while((timeinfo.tm_year < (2016 - 1900)) && (++retry < retry_count)) {
-    //ESP_LOGI(
-      //__func__,
-      //"Waiting for system time to be set... (%d/%d)",
-      //retry,
-      //retry_count);
-
-    //vTaskDelay(2000 / portTICK_PERIOD_MS);
-    //time(&now);
-    //localtime_r(&now, &timeinfo);
-  //}
-
-  //return (timeinfo.tm_year < (2016 - 1900)) ? false : true;
-//}
-
-//static void
-//_init_sntp(void)
-//{
-  //ESP_LOGI(__func__, "Initializing SNTP");
-  //sntp_setoperatingmode(SNTP_OPMODE_POLL);
-  //sntp_setservername(0, "pool.ntp.org");
-  //sntp_init();
-//}
-
 /***** Global Functions *****/
 
 bool
-wifi_connect(void)
+wifi_connect(char * ssid, char * password)
 {
   const TickType_t wifi_connect_timeout = 60000 / portTICK_PERIOD_MS;
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
@@ -123,28 +86,9 @@ wifi_connect(void)
 
   // IF YOU DON'T DO THIS, YOU WILL HAVE A GARBAGE FILLED STRUCT
   memset(&wifi_config, 0, sizeof(wifi_config_t));
-
-  if (r) {
-    len = memory_get_item(MEMORY_ITEM_WIFI_SSID, wifi_config.sta.ssid, 32);
-    if (len <= 0) {
-      r = false;
-    }
-    else {
-      wifi_config.sta.ssid[len] = '\0';
-      printf("ssid (%d) = %s\n", len, wifi_config.sta.ssid);
-    }
-  }
-
-  if (r) {
-    len = memory_get_item(MEMORY_ITEM_WIFI_PASS, wifi_config.sta.password, 32);
-    if (len <= 0) {
-      r = false;
-    }
-    else {
-      wifi_config.sta.password[len] = '\0';
-      printf("password (%d) = %s\n", len, wifi_config.sta.password);
-    }
-  }
+  // Do one less than max length to make sure values are NULL terminated.
+  strncpy((char *) wifi_config.sta.ssid, ssid, WIFI_SSID_LEN_MAX-1);
+  strncpy((char *) wifi_config.sta.password, password, WIFI_PASSWORD_LEN_MAX-1);
 
   if (r) {
     tcpip_adapter_init();

@@ -13,17 +13,27 @@
 #include "memory.h"
 #include "state.h"
 #include "hal.h"
+#include "iot_mqtt.h"
 
 /***** Defines *****/
 
-#define PEEP_STATE__deep_sleep_TIME_MIN 15
-#define BUFFER_LENGTH 8192
+// Comment this out to enter deep sleep when not active.
+#define _NO_DEEP_SLEEP 1
+#define _MEASURE_INTERVAL_SEC 15
+#define _BUFFER_LEN 8192
 
 /***** Local Data *****/
 
-static uint8_t _buffer[BUFFER_LENGTH];
-static bool(*_config_tx)(uint8_t * buf, uint32_t len) = NULL;
-static volatile bool _is_config = false;
+static uint8_t _buffer[_BUFFER_LEN];
+
+extern const uint8_t _uuid_start[]   asm("_binary_uuid_txt_start");
+extern const uint8_t _uuid_end[]   asm("_binary_uuid_txt_end");
+
+extern const uint8_t _ssid_start[]   asm("_binary_wifi_ssid_txt_start");
+extern const uint8_t _ssid_end[]   asm("_binary_wifi_ssid_txt_end");
+
+extern const uint8_t _pass_start[]   asm("_binary_wifi_pass_txt_start");
+extern const uint8_t _pass_end[]   asm("_binary_wifi_pass_txt_end");
 
 /***** Local Functions *****/
 
@@ -43,140 +53,64 @@ _deep_sleep(uint32_t sec)
 }
 
 static void
-_config_rx(uint8_t * buf, uint32_t len)
+_measure_task(void * arg)
 {
-  const uint32_t tx_len_max = BUFFER_LENGTH / 2;
-  uint32_t tx_len = 0;
-  uint8_t * tx = _buffer;
-
-  bool r = true;
-
-  if (r) {
-    r = message_client_write(buf, len);
-  }
-
-  if (r) {
-    r = message_device_response(tx, &tx_len, tx_len_max);
-  }
-
-  if ((r) && (_config_tx)) {
-    r = _config_tx(tx, tx_len);
-  }
-
-  if (message_is_client_done()) {
-    // TODO: Need to delay until last Tx message is sent???
-    vTaskDelay(5000 / portTICK_PERIOD_MS);
-    _is_config = false;
-  }
-}
-
-static void
-_state_ble_config(void)
-{
-  uint32_t half = BUFFER_LENGTH / 2;
-  bool r = true;
-
-  _is_config = true;
-  r = ble_enable(_buffer, half);
-  RESULT_TEST(r, "failed to enable BLE\n");
-
-  if (r) {
-    r = message_init(_buffer + half, half);
-  }
-
-  while (_is_config) {
-    // TODO: better sleep mechanism
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-  }
-
-  r = ble_disable();
-  if (!r) {
-    printf("failed to disable BLE\n");
-  }
-  _deep_sleep(0);
-}
-
-static void
-_state_uart_config(void)
-{
-  uint32_t half = BUFFER_LENGTH / 2;
-  bool r = true;
-
-  _is_config = true;
-
-  if (r) {
-    r = message_init(_buffer + half, half);
-  }
-
-  if (r) {
-    uart_server_register_rx_callback(_config_rx);
-    _config_tx = uart_server_tx;
-  }
-
-  if (r) {
-    r = uart_server_enable(_buffer, half);
-    RESULT_TEST(r, "failed to enable UART\n");
-  }
-
-  while (_is_config) {
-    // TODO: better sleep mechanism
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-  }
-
-  r = uart_server_disable();
-  if (!r) {
-    printf("failed to disable uart!\n");
-  }
-  _deep_sleep(0);
-}
-
-static void
-_state_measure(void)
-{
-  char * id = (char *) &_buffer[BUFFER_LENGTH / 2];
+  char * ssid = (char *) _ssid_start;
+  char * password = (char *) _pass_start;
   char * msg = (char *) &_buffer[0];
   float temperature = 0.0;
   float humidity = 0.0;
-  int len = 0;
-  uint32_t n = 0;
   bool r = true;
+
+  LOGI("start");
 
   if (r) {
     r = hal_init();
   }
 
   if (r) {
+    r = wifi_connect(ssid, password);
+  }
+
+  if (r) {
+    r = iot_mqtt_init();
+  }
+
+#ifdef _NO_DEEP_SLEEP
+  uint32_t n = 0;
+
+  while (r) {
+    if (r) {
+      r = hal_read_temperature_humdity(&temperature, &humidity);
+    }
+
+    if (r) {
+      sprintf(
+        msg,
+        "{\n"
+        "\"hatch\": \"%s\",\n"
+        "\"time\": %d,\n"
+        "\"temperature\": %f,\n"
+        "\"humidity\": %f\n"
+        "}",
+        (const char *) _uuid_start,
+        (int) time(NULL),
+        temperature,
+        humidity);
+
+        r = iot_mqtt_publish("hatchtrack/data/put", msg, false);
+    }
+
+    if (r) {
+      n++;
+      LOGI("iteration %d\n", n);
+      vTaskDelay((_MEASURE_INTERVAL_SEC * 1000) / portTICK_PERIOD_MS);
+    }
+  }
+
+#else
+  if (r) {
     r = hal_read_temperature_humdity(&temperature, &humidity);
-  }
-
-  if (r) {
-    len = memory_get_item(MEMORY_ITEM_MEASURE_COUNT, (uint8_t *) &n, sizeof(n));
-    if (sizeof(n) == len) {
-      n -= 1;
-      printf("[%s] : %d measurements left\n", __func__, n);
-      memory_set_item(MEMORY_ITEM_MEASURE_COUNT, (uint8_t *) &n, sizeof(n));
-      if (0 == n) {
-        peep_set_state(PEEP_STATE_UART_CONFIG);
-      }
-    }
-  }
-
-  if (r) {
-    r = wifi_connect();
-  }
-
-  if (r) {
-    r = aws_connect(_buffer, 8192);
-  }
-
-  if (r) {
-    len = memory_get_item(MEMORY_ITEM_UUID, (uint8_t *) id, BUFFER_LENGTH / 2);
-    if (0 >= len) {
-      r = false;
-    }
-    else {
-      id[len] = '\0';
-    }
   }
 
   if (r) {
@@ -188,31 +122,16 @@ _state_measure(void)
       "\"temperature\": %f,\n"
       "\"humidity\": %f\n"
       "}",
-      id,
+      (const char *) _uuid_start,
       (int) time(NULL),
       temperature,
       humidity);
 
-    if (true != aws_publish_json((uint8_t *) msg, strlen(msg))) {
-      printf("Failed to publish message!\n");
-    }
+      r = iot_mqtt_publish("/test", msg, true);
   }
+#endif
 
-  if (r) {
-    len = memory_get_item(MEMORY_ITEM_MEASURE_SEC, (uint8_t *) &n, sizeof(n));
-    if (sizeof(n) != len) {
-      n = 15 * 60; // TODO: default to 15 minutes?
-      printf("failed to read Peep measure delay, default to %d seconds\n", n);
-    }
-  }
-
-  if (r) {
-    _deep_sleep(n);
-  }
-  else {
-    //peep_set_state(PEEP_STATE_UART_CONFIG);
-    _deep_sleep(0);
-  }
+  _deep_sleep(_MEASURE_INTERVAL_SEC);
 }
 
 /***** Global Functions *****/
@@ -220,32 +139,8 @@ _state_measure(void)
 void
 app_main()
 {
-  enum peep_state state = PEEP_STATE_UNKNOWN;
-  bool r = true;
-
   nvs_flash_init();
   led_init();
-  r = memory_init();
-  RESULT_TEST(r, "failed to initialize memory\n");
 
-  r = peep_get_state(&state);
-  if ((false == r) || (PEEP_STATE_UNKNOWN == state)) {
-    state = PEEP_STATE_UART_CONFIG;
-    peep_set_state(state);
-  }
-
-  if (PEEP_STATE_BLE_CONFIG == state) {
-    printf("PEEP_STATE_BLE_CONFIG\n");
-    _state_ble_config();
-  }
-  else if (PEEP_STATE_UART_CONFIG == state) {
-    printf("PEEP_STATE_UART_CONFIG\n");
-    _state_uart_config();
-  }
-  else if (PEEP_STATE_MEASURE == state) {
-    printf("PEEP_STATE_MEASURE\n");
-    _state_measure();
-  }
-
-  // should not return from above code...
+  xTaskCreate(_measure_task, "measurement task", 8192, NULL, 2, NULL);
 }

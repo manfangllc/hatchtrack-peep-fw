@@ -373,14 +373,14 @@ hal_read_temperature_humdity(float * p_temperature, float * p_humidity)
 
   if (r) {
     bme680_get_profile_dur(&measure_delay, &_bme680);
-    LOGI("measure delay = %d\n", measure_delay);
+    LOGD("measure delay = %d", measure_delay);
     _sleep(measure_delay * 2);
   }
 
   if (r) {
     status = bme680_get_sensor_data(&data, &_bme680);
     if (0 != status) {
-      LOGE("failed to read data (%d)!\n", status);
+      LOGE("failed to read data (%d)!", status);
       r = false;
     }
   }
@@ -390,13 +390,14 @@ hal_read_temperature_humdity(float * p_temperature, float * p_humidity)
     humidity = data.humidity / 1000.0;
     pressure = data.pressure;
     gas_resistance = data.gas_resistance;
-
-    LOGI(
-      "t=%f\nh=%f\np=%f\ng=%f\n",
-      temperature,
-      humidity,
-      pressure,
-      gas_resistance);
+    (void) gas_resistance;
+    (void) pressure;
+    //LOGI(
+      //"t=%f\nh=%f\np=%f\ng=%f\n",
+      //temperature,
+      //humidity,
+      //pressure,
+      //gas_resistance);
     
     *p_temperature = temperature;
     *p_humidity = humidity;
@@ -503,6 +504,9 @@ TEST_CASE("HAL piezo", "[hal.c]")
 
   printf("* Turning off piezo.\n");
   r = _piezo_off();
+  TEST_ASSERT(r);
+
+  r = unit_test_prompt_yn("* Did the piezo turn on?");
   TEST_ASSERT(r);
 }
 

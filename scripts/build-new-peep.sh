@@ -1,23 +1,25 @@
 #!/bin/sh
 
-if [ -z "$1" ]; then
-  echo "$0 [WIFI-SSID] [WIFI-PASS]"
-  exit 1
-fi
-
-if [ -z "$2" ]; then
-  echo "$0 [WIFI-SSID] [WIFI-PASS]"
+if [ "$#" -ne 6 ]; then
+  echo "$0 [$UUID] [WIFI-SSID] [WIFI-PASS] [ROOT-CA] [CERT] [KEY]"
   exit 1
 fi
 
 BASE=$(dirname $0)
-SSID=$1
-PASS=$2
+UUID=$1
+SSID=$2
+PASS=$3
+ROOTCA=$4
+CERT=$5
+KEY=$6
 
 cd $(realpath $BASE/..)
 
-printf "%s" "$(uuidgen)" > ./main/uuid.txt
+printf "%s" "$UUID" > ./main/uuid.txt
 printf "%s" "$SSID" > ./main/wifi_ssid.txt
 printf "%s" "$PASS" > ./main/wifi_pass.txt
+cat $ROOTCA > ./main/root_ca.txt
+cat $CERT > ./main/cert.txt
+cat $KEY > ./main/key.txt
 
 make

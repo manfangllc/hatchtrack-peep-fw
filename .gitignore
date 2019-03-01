@@ -4,3 +4,6 @@ sdkconfig.old
 uuid.txt
 wifi_ssid.txt
 wifi_pass.txt
+cert.txt
+key.txt
+root_ca.txt

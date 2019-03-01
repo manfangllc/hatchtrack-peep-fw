@@ -26,6 +26,15 @@
 
 static uint8_t _buffer[_BUFFER_LEN];
 
+extern const uint8_t _rootca_start[]   asm("_binary_root_ca_txt_start");
+extern const uint8_t _rootca_end[]   asm("_binary_root_ca_txt_end");
+
+extern const uint8_t _cert_start[]   asm("_binary_cert_txt_start");
+extern const uint8_t _cert_end[]   asm("_binary_cert_txt_end");
+
+extern const uint8_t _key_start[]   asm("_binary_key_txt_start");
+extern const uint8_t _key_end[]   asm("_binary_key_txt_end");
+
 extern const uint8_t _uuid_start[]   asm("_binary_uuid_txt_start");
 extern const uint8_t _uuid_end[]   asm("_binary_uuid_txt_end");
 

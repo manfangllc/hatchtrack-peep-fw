@@ -26,8 +26,8 @@
 
 static uint8_t _buffer[_BUFFER_LEN];
 
-extern const uint8_t _rootca_start[]   asm("_binary_root_ca_txt_start");
-extern const uint8_t _rootca_end[]   asm("_binary_root_ca_txt_end");
+extern const uint8_t _root_ca_start[]   asm("_binary_root_ca_txt_start");
+extern const uint8_t _root_ca_end[]   asm("_binary_root_ca_txt_end");
 
 extern const uint8_t _cert_start[]   asm("_binary_cert_txt_start");
 extern const uint8_t _cert_end[]   asm("_binary_cert_txt_end");
@@ -64,6 +64,9 @@ _deep_sleep(uint32_t sec)
 static void
 _measure_task(void * arg)
 {
+  char * root_ca = (char *) _root_ca_start;
+  char * cert = (char *) _cert_start;
+  char * key = (char *) _key_start;
   char * ssid = (char *) _ssid_start;
   char * password = (char *) _pass_start;
   char * msg = (char *) &_buffer[0];
@@ -82,7 +85,7 @@ _measure_task(void * arg)
   }
 
   if (r) {
-    r = iot_mqtt_init();
+    r = iot_mqtt_init(root_ca, cert, key);
   }
 
 #ifdef _NO_DEEP_SLEEP

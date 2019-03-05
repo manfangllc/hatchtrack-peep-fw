@@ -73,7 +73,7 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
 /***** Global Functions *****/
 
 bool
-iot_mqtt_init(void)
+iot_mqtt_init(char * root_ca, char * client_cert, char * client_key)
 {
   esp_mqtt_client_config_t mqtt_cfg;
   const TickType_t connect_timeout = 60000 / portTICK_PERIOD_MS;
@@ -85,7 +85,9 @@ iot_mqtt_init(void)
 
   mqtt_cfg.uri = _BROKER_URI;
   mqtt_cfg.event_handle = mqtt_event_handler;
-  mqtt_cfg.cert_pem = (const char *) _pem_start;
+  mqtt_cfg.cert_pem = (const char *) root_ca;
+  mqtt_cfg.client_cert_pem = (const char *) client_cert;
+  mqtt_cfg.client_key_pem = (const char *) client_key;
   mqtt_cfg.disable_auto_reconnect = false;
   _mqtt_event_group = xEventGroupCreate();
   _client = esp_mqtt_client_init(&mqtt_cfg);

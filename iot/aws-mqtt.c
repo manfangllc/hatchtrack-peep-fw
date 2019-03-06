@@ -65,19 +65,24 @@ disconnectCallbackHandler(AWS_IoT_Client *pClient, void *data)
   }
 }
 
+void _subscribe_callback_handler(AWS_IoT_Client * p_client, char * topic,
+  uint16_t topic_len, IoT_Publish_Message_Params * params, void * p_data)
+{
+  aws_subscribe_cb cb = p_data;
+
+  cb(params->payload, params->payloadLen);
+}
+
 /***** Global Functions *****/
 
 bool
 aws_mqtt_init(char * root_ca, char * client_cert, char * client_key, 
   char * client_id)
 {
-  bool r = true;
-  int32_t m = 0;
-  int32_t n = 0;
-
   IoT_Client_Init_Params mqtt_params = iotClientInitParamsDefault;
   IoT_Client_Connect_Params connect_params = iotClientConnectParamsDefault;
   IoT_Error_t err = SUCCESS;
+  bool r = true;
 
   mqtt_params.enableAutoReconnect = false;
   mqtt_params.pHostURL = AWS_HOST_NAME;
@@ -152,4 +157,42 @@ aws_mqtt_publish(char * topic, char * message, bool retain)
   r = aws_iot_mqtt_publish(&_client, topic, strlen(topic), &publish_params);
 
   return (SUCCESS == r) ? true : false;
+}
+
+bool
+aws_mqtt_subsribe(char * topic, aws_subscribe_cb cb)
+{
+  IoT_Error_t rc = FAILURE;
+
+  rc = aws_iot_mqtt_subscribe(
+    &_client,
+    topic,
+    strlen(topic),
+    QOS0,
+    _subscribe_callback_handler,
+    cb);
+
+  if(SUCCESS != rc) {
+    LOGE("Error subscribing : %d", rc);
+    return false;
+  }
+  else {
+    LOGI("Subscribed to %s\n", topic);
+  }
+
+  return true;
+}
+
+bool
+aws_mqtt_subsribe_poll(uint32_t poll_ms)
+{
+  IoT_Error_t rc = FAILURE;
+
+  rc = aws_iot_mqtt_yield(&_client, poll_ms);
+  if(SUCCESS != rc) {
+    LOGE("Error polling : %d", rc);
+    return false;
+  }
+
+  return true;
 }

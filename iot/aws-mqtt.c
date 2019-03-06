@@ -1,9 +1,7 @@
 /***** Includes *****/
 
-#include "aws.h"
+#include "aws-mqtt.h"
 #include "system.h"
-#include "memory.h"
-#include "state.h"
 
 #include "aws_iot_config.h"
 #include "aws_iot_log.h"
@@ -13,7 +11,7 @@
 
 /***** Defines *****/
 
-#define AWS_HOST_NAME "a1mdhmgt02ub52.iot.us-west-2.amazonaws.com" // unique
+#define AWS_HOST_NAME "a1mdhmgt02ub52-ats.iot.us-west-2.amazonaws.com" // unique
 #define AWS_PORT_NUMBER 8883 // default
 
 #define AWS_TOPIC_NAME "hatchtrack/data/put"
@@ -26,8 +24,8 @@ static AWS_IoT_Client _client;
 
 void
 ShadowUpdateStatusCallback(const char *pThingName, ShadowActions_t action,
-Shadow_Ack_Status_t status, const char *pReceivedJsonDocument,
-void *pContextData)
+  Shadow_Ack_Status_t status, const char *pReceivedJsonDocument,
+  void *pContextData)
 {
   IOT_UNUSED(pThingName);
   IOT_UNUSED(action);
@@ -70,7 +68,8 @@ disconnectCallbackHandler(AWS_IoT_Client *pClient, void *data)
 /***** Global Functions *****/
 
 bool
-aws_connect(uint8_t * buf, uint32_t len)
+aws_mqtt_init(char * root_ca, char * client_cert, char * client_key, 
+  char * client_id)
 {
   bool r = true;
   int32_t m = 0;
@@ -88,63 +87,15 @@ aws_connect(uint8_t * buf, uint32_t len)
   mqtt_params.isSSLHostnameVerify = true;
   mqtt_params.disconnectHandler = disconnectCallbackHandler;
   mqtt_params.disconnectHandlerData = NULL;
+  mqtt_params.pRootCALocation = (const char *) root_ca;
+  mqtt_params.pDeviceCertLocation = (const char *) client_cert;
+  mqtt_params.pDevicePrivateKeyLocation = (const char *) client_key;
+  connect_params.pClientID = (const char *) client_id;
+  connect_params.clientIDLen = (uint16_t) strlen(client_id);
   connect_params.keepAliveIntervalInSec = 10;
   connect_params.isCleanSession = true;
   connect_params.MQTTVersion = MQTT_3_1_1;
   connect_params.isWillMsgPresent = false;
-
-  if (r) {
-    n = memory_get_item(MEMORY_ITEM_ROOT_CA, buf + m, len - m);
-    if (n > 0) {
-      mqtt_params.pRootCALocation = (const char *) &(buf[m]);
-      m += n;
-      buf[m++] = '\0';
-      printf("%s\n", mqtt_params.pRootCALocation);
-    }
-    else {
-      r = false;
-    }
-  }
-
-  if (r) {
-    n = memory_get_item(MEMORY_ITEM_DEV_CERT, buf + m, len - m);
-    if (n > 0) {
-      mqtt_params.pDeviceCertLocation = (const char *) &(buf[m]);
-      m += n;
-      buf[m++] = '\0';
-      printf("%s\n", mqtt_params.pDeviceCertLocation);
-    }
-    else {
-      r = false;
-    }
-  }
-
-  if (r) {
-    n = memory_get_item(MEMORY_ITEM_DEV_PRIV_KEY, buf + m, len - m);
-    if (n > 0) {
-      mqtt_params.pDevicePrivateKeyLocation = (const char *) &(buf[m]);
-      m += n;
-      buf[m++] = '\0';
-      printf("%s\n", mqtt_params.pDevicePrivateKeyLocation);
-    }
-    else {
-      r = false;
-    }
-  }
-
-  if (r) {
-    n = memory_get_item(MEMORY_ITEM_UUID, buf + m, len - m);
-    if (n > 0) {
-      connect_params.pClientID = (const char *) &(buf[m]);
-      connect_params.clientIDLen = (uint16_t) n;
-      m += n;
-      buf[m++] = '\0';
-      printf("%s\n", connect_params.pClientID);
-    }
-    else {
-      r = false;
-    }
-  }
 
   if (r) {
     // Feed watchdog.
@@ -184,20 +135,21 @@ aws_disconnect(void)
 }
 
 bool
-aws_publish_json(uint8_t * json_str, uint32_t json_len)
+aws_mqtt_publish(char * topic, char * message, bool retain)
 {
   IoT_Publish_Message_Params publish_params;
   IoT_Error_t r = SUCCESS;
-  const char * topic = AWS_TOPIC_NAME;
-  const int topic_len = strlen(topic);
+
+  // NOT SUPPORTED BY AWS!
+  (void) retain;
 
   publish_params.qos = QOS0;
   publish_params.isRetained = 0;
-  publish_params.payload = (void *) json_str;
-  publish_params.payloadLen = json_len;
+  publish_params.payload = (void *) message;
+  publish_params.payloadLen = strlen(message);
 
-  printf("%s\n%s\n", topic, json_str);
-  r = aws_iot_mqtt_publish(&_client, topic, topic_len, &publish_params);
+  printf("%s\n%s\n", topic, message);
+  r = aws_iot_mqtt_publish(&_client, topic, strlen(topic), &publish_params);
 
   return (SUCCESS == r) ? true : false;
 }

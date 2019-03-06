@@ -2,4 +2,5 @@ COMPONENT_PRIV_INCLUDEDIRS := \
   . \
   ../main
 
-COMPONENT_EMBED_TXTFILES := iot_mqtt.pem
+COMPONENT_OBJS := \
+  aws-mqtt.o

@@ -1,10 +1,10 @@
 COMPONENT_PRIV_INCLUDEDIRS := \
   . \
-  ../bme680 \
-  ../main \
-  ../protobuf \
-  ../wifi \
-  ../lib/hatchtrack-peep-protobuf/header
+  ../main
+
+COMPONENT_OBJS := \
+  memory.o \
+  state.o
 
 ifeq ($(PROJECT_NAME),hatchtrack-peep-unit-test-fw)
   COMPONENT_PRIV_INCLUDEDIRS += ../test/main

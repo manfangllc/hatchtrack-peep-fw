@@ -2,7 +2,7 @@
 
 BASE=$(dirname $0)
 
-ESPTOOL=$(realpath $BASE/../lib/esp-idf/components/esptool_py/esptool/esptool.py)
+ESPTOOL=$(realpath $BASE/../esp-idf/components/esptool_py/esptool/esptool.py)
 PORT=/dev/ttyUSB0
 
 BOOT_FW=$(realpath $BASE/../build/bootloader/bootloader.bin)

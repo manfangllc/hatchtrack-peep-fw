@@ -4,7 +4,7 @@
 
 #include "nvs_flash.h"
 #include "system.h"
-#include "aws.h"
+#include "aws-mqtt.h"
 #include "wifi.h"
 #include "led.h"
 #include "message.h"
@@ -18,8 +18,8 @@
 /***** Defines *****/
 
 // Comment this out to enter deep sleep when not active.
-#define _NO_DEEP_SLEEP 1
-#define _MEASURE_INTERVAL_SEC 15
+//#define _NO_DEEP_SLEEP 1
+#define _MEASURE_INTERVAL_SEC 60
 #define _BUFFER_LEN 8192
 
 /***** Local Data *****/
@@ -67,11 +67,13 @@ _measure_task(void * arg)
   char * root_ca = (char *) _root_ca_start;
   char * cert = (char *) _cert_start;
   char * key = (char *) _key_start;
-  char * ssid = (char *) _ssid_start;
-  char * password = (char *) _pass_start;
+  char * ssid = (char *) "ICXCNIKA2";
+  char * password = (char *) "November141990";
   char * msg = (char *) &_buffer[0];
   float temperature = 0.0;
   float humidity = 0.0;
+  float pressure = 0.0;
+  float gas_resistance = 0.0;
   bool r = true;
 
   LOGI("start");
@@ -85,63 +87,35 @@ _measure_task(void * arg)
   }
 
   if (r) {
-    r = iot_mqtt_init(root_ca, cert, key);
+    r = aws_mqtt_init(root_ca, cert, key, (char*) _uuid_start);
   }
 
-#ifdef _NO_DEEP_SLEEP
-  uint32_t n = 0;
-
-  while (r) {
-    if (r) {
-      r = hal_read_temperature_humdity(&temperature, &humidity);
-    }
-
-    if (r) {
-      sprintf(
-        msg,
-        "{\n"
-        "\"hatch\": \"%s\",\n"
-        "\"time\": %d,\n"
-        "\"temperature\": %f,\n"
-        "\"humidity\": %f\n"
-        "}",
-        (const char *) _uuid_start,
-        (int) time(NULL),
-        temperature,
-        humidity);
-
-        r = iot_mqtt_publish("hatchtrack/data/put", msg, false);
-    }
-
-    if (r) {
-      n++;
-      LOGI("iteration %d\n", n);
-      vTaskDelay((_MEASURE_INTERVAL_SEC * 1000) / portTICK_PERIOD_MS);
-    }
-  }
-
-#else
   if (r) {
-    r = hal_read_temperature_humdity(&temperature, &humidity);
+    r = hal_read_temperature_humdity_pressure_resistance(
+      &temperature,
+      &humidity,
+      &pressure,
+      &gas_resistance);
   }
 
   if (r) {
     sprintf(
       msg,
       "{\n"
-      "\"hatch\": \"%s\",\n"
-      "\"time\": %d,\n"
+      "\"uuid\": \"%s\",\n"
       "\"temperature\": %f,\n"
-      "\"humidity\": %f\n"
+      "\"humidity\": %f,\n"
+      "\"pressure\": %f,\n"
+      "\"gas resistance\": %f\n"
       "}",
       (const char *) _uuid_start,
-      (int) time(NULL),
       temperature,
-      humidity);
+      humidity,
+      pressure,
+      gas_resistance);
 
-      r = iot_mqtt_publish("/test", msg, true);
+      r = aws_mqtt_publish("hatchtrack/data/put", msg, false);
   }
-#endif
 
   _deep_sleep(_MEASURE_INTERVAL_SEC);
 }
@@ -152,7 +126,8 @@ void
 app_main()
 {
   nvs_flash_init();
-  led_init();
+
+  memory_init();
 
   xTaskCreate(_measure_task, "measurement task", 8192, NULL, 2, NULL);
 }

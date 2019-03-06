@@ -10,14 +10,11 @@
 /* BE CAREFUL MODIFYING THIS, INTERNALS MAKE ASSUMPTIONS ON THE ENUM VALUES */
 enum memory_item {
   MEMORY_ITEM_INVALID = 0,
+  MEMORY_ITEM_TEST,           // string
   MEMORY_ITEM_STATE,          // enum peep_state
-  MEMORY_ITEM_UUID,           // string
   MEMORY_ITEM_DATA_LOG,       // TODO
   MEMORY_ITEM_WIFI_SSID,      // string
   MEMORY_ITEM_WIFI_PASS,      // string
-  MEMORY_ITEM_ROOT_CA,        // string
-  MEMORY_ITEM_DEV_CERT,       // string
-  MEMORY_ITEM_DEV_PRIV_KEY,   // string
   MEMORY_ITEM_MEASURE_COUNT,  // uint32_t
   MEMORY_ITEM_MEASURE_SEC,    // uint32_t
 };

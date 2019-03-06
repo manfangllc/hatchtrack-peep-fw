@@ -336,7 +336,8 @@ hal_init(void)
 }
 
 bool
-hal_read_temperature_humdity(float * p_temperature, float * p_humidity)
+hal_read_temperature_humdity_pressure_resistance(float * p_temperature,
+  float * p_humidity, float * p_pressure, float * p_gas_resistance)
 {
   struct bme680_field_data data;
   uint16_t measure_delay = 0;
@@ -390,17 +391,11 @@ hal_read_temperature_humdity(float * p_temperature, float * p_humidity)
     humidity = data.humidity / 1000.0;
     pressure = data.pressure;
     gas_resistance = data.gas_resistance;
-    (void) gas_resistance;
-    (void) pressure;
-    //LOGI(
-      //"t=%f\nh=%f\np=%f\ng=%f\n",
-      //temperature,
-      //humidity,
-      //pressure,
-      //gas_resistance);
     
     *p_temperature = temperature;
     *p_humidity = humidity;
+    *p_pressure = pressure;
+    *p_gas_resistance = gas_resistance;
   }
 
   return r;

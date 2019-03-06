@@ -3,9 +3,9 @@ PROJECT_NAME := hatchtrack-peep-fw
 
 EXTRA_COMPONENT_DIRS := \
   bme680 \
-  icm20602 \
   hal \
   iot \
+  icm20602 \
   peep \
   protobuf \
   wifi

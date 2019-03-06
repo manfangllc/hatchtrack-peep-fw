@@ -18,15 +18,12 @@ static char * _file_lut[] = {
   */
   NULL, // MEMORY_ITEM_INVALID
   "/p/state", // MEMORY_ITEM_STATE
-  "/p/uuid", // MEMORY_ITEM_UUID
+  "/p/test", // MEMORY_ITEM_TEST
   "/p/data", // MEMORY_ITEM_DATA_LOG
   "/p/ssid", // MEMORY_ITEM_WIFI_SSID
   "/p/pass", // MEMORY_ITEM_WIFI_PASS
-  "/p/rootca", // MEMORY_ITEM_ROOT_CA
-  "/p/devcert", // MEMORY_ITEM_DEV_CERT
-  "/p/devpriv", // MEMORY_ITEM_DEV_PRIV_KEY
-  "/p/nummeas", // MEMORY_ITEM_DEV_PRIV_KEY
-  "/p/minmeas", // MEMORY_ITEM_DEV_PRIV_KEY
+  "/p/mcnt", // MEMORY_ITEM_MEASURE_COUNT
+  "/p/msec", // MEMORY_ITEM_MEASURE_SEC
 };
 
 /***** Global Functions *****/

@@ -4,9 +4,7 @@ COMPONENT_PRIV_INCLUDEDIRS := \
   ../hal \
   ../iot \
   ../peep \
-  ../protobuf \
-  ../wifi \
-  ../lib/hatchtrack-peep-protobuf/header
+  ../wifi
 
 COMPONENT_EMBED_TXTFILES := \
   uuid.txt \

@@ -131,7 +131,7 @@ _ble_read_callback(uint8_t * buf, uint16_t * len, uint16_t max_len)
 }
 
 static void
-_ble_config_task(void * arg)
+_ble_config_wifi_credentials_task(void * arg)
 {
   EventBits_t bits = 0;
   bool r = true;
@@ -292,9 +292,21 @@ app_main()
   }
 
   if (PEEP_STATE_BLE_CONFIG == state) {
-    xTaskCreate(_ble_config_task, "ble config task", 8192, NULL, 2, NULL);
+    xTaskCreate(
+      _ble_config_wifi_credentials_task,
+      "ble config task",
+      8192,
+      NULL,
+      2,
+      NULL);
   }
   else if (PEEP_STATE_MEASURE == state) {
-    xTaskCreate(_measure_task, "measurement task", 8192, NULL, 2, NULL);
+    xTaskCreate(
+      _measure_task,
+      "measurement task",
+      8192,
+      NULL,
+      2,
+      NULL);
   }
 }

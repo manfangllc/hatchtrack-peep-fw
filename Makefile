@@ -2,6 +2,7 @@ export IDF_PATH := ./esp-idf
 PROJECT_NAME := hatchtrack-peep-fw
 
 EXTRA_COMPONENT_DIRS := \
+  ble \
   bme680 \
   hal \
   iot \

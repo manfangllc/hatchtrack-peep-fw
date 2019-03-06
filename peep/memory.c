@@ -17,8 +17,8 @@ static char * _file_lut[] = {
   ________MAX_LEN
   */
   NULL, // MEMORY_ITEM_INVALID
-  "/p/state", // MEMORY_ITEM_STATE
   "/p/test", // MEMORY_ITEM_TEST
+  "/p/state", // MEMORY_ITEM_STATE
   "/p/data", // MEMORY_ITEM_DATA_LOG
   "/p/ssid", // MEMORY_ITEM_WIFI_SSID
   "/p/pass", // MEMORY_ITEM_WIFI_PASS

@@ -1,5 +1,6 @@
 COMPONENT_PRIV_INCLUDEDIRS := \
   . \
+  ../ble \
   ../bme680 \
   ../hal \
   ../iot \

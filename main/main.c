@@ -1,10 +1,12 @@
 /***** Includes *****/
 
-#include <time.h>
+#include <string.h>
 
 #include "nvs_flash.h"
+#include "jsmn.h"
 #include "system.h"
-#include "aws.h"
+#include "aws-mqtt.h"
+#include "ble_server.h"
 #include "wifi.h"
 #include "led.h"
 #include "message.h"
@@ -12,207 +14,331 @@
 #include "uart_server.h"
 #include "memory.h"
 #include "state.h"
-#include "sensor.h"
+#include "hal.h"
 
 /***** Defines *****/
 
-#define PEEP_STATE__deep_sleep_TIME_MIN 15
-#define BUFFER_LENGTH 8192
+// Comment this out to enter deep sleep when not active.
+//#define _NO_DEEP_SLEEP 1
+#define _MEASURE_INTERVAL_SEC 60
+#define _BUFFER_LEN 8192
 
 /***** Local Data *****/
 
-static uint8_t _buffer[BUFFER_LENGTH];
-static bool(*_config_tx)(uint8_t * buf, uint32_t len) = NULL;
-static volatile bool _is_config = false;
+static uint8_t _buffer[_BUFFER_LEN];
+
+extern const uint8_t _root_ca_start[]   asm("_binary_root_ca_txt_start");
+extern const uint8_t _root_ca_end[]   asm("_binary_root_ca_txt_end");
+
+extern const uint8_t _cert_start[]   asm("_binary_cert_txt_start");
+extern const uint8_t _cert_end[]   asm("_binary_cert_txt_end");
+
+extern const uint8_t _key_start[]   asm("_binary_key_txt_start");
+extern const uint8_t _key_end[]   asm("_binary_key_txt_end");
+
+extern const uint8_t _uuid_start[]   asm("_binary_uuid_txt_start");
+extern const uint8_t _uuid_end[]   asm("_binary_uuid_txt_end");
+
+static char _ssid[WIFI_SSID_LEN_MAX] = {0};
+static char _pass[WIFI_PASSWORD_LEN_MAX] = {0};
+
+static EventGroupHandle_t _sync_event_group = NULL;
+const int SYNC_BIT = BIT0;
 
 /***** Local Functions *****/
 
 static void
 _deep_sleep(uint32_t sec)
 {
-	esp_err_t r = ESP_OK;
-	uint64_t wakeup_time_usec = sec * 1000000;
+  esp_err_t r = ESP_OK;
+  uint64_t wakeup_time_usec = sec * 1000000;
 
-	printf("Entering %d second deep sleep\n", sec);
+  printf("Entering %d second deep sleep\n", sec);
 
-	r = esp_sleep_enable_timer_wakeup(wakeup_time_usec);
-	RESULT_TEST_ERROR_TRACE((ESP_OK == r), "failed to set wakeup timer");
+  r = esp_sleep_enable_timer_wakeup(wakeup_time_usec);
+  RESULT_TEST((ESP_OK == r), "failed to set wakeup timer");
 
-	// Will not return from the above function.
-	esp_deep_sleep_start();
+  // Will not return from the above function.
+  esp_deep_sleep_start();
+}
+
+void
+_ble_write_callback(uint8_t * buf, uint16_t len)
+{
+  static char key[128];
+  static char value[128];
+  jsmntok_t t[16];
+  jsmn_parser p;
+  const char * js;
+  jsmntok_t json_value;
+  jsmntok_t json_key;
+  int string_length;
+  int key_length;
+  int idx;
+  int n;
+  int r;
+
+  jsmn_init(&p);
+
+  js = (const char *) buf;
+  r = jsmn_parse(&p, js, strlen(js), t, sizeof(t)/(sizeof(t[0])));
+
+   /* Assume the top-level element is an object */
+  if ((r < 1) || (t[0].type != JSMN_OBJECT)) {
+    printf("Object expected\n");
+    return;
+  }
+
+  for (n = 1; n < r; n++) {
+    json_value = t[n+1];
+    json_key = t[n];
+    string_length = json_value.end - json_value.start;
+    key_length = json_key.end - json_key.start;
+
+    for (idx = 0; idx < string_length; idx++){
+      value[idx] = js[json_value.start + idx];
+    }
+
+    for (idx = 0; idx < key_length; idx++){
+      key[idx] = js[json_key.start + idx];
+    }
+
+    value[string_length] = '\0';
+    key[key_length] = '\0';
+    LOGI("decoded: %s = %s\n", key, value);
+
+    if (0 == strcmp(key, "ssid")) {
+      strncpy(_ssid, value, WIFI_SSID_LEN_MAX);
+    }
+    else if (0 == strcmp(key, "password")) {
+      strncpy(_pass, value, WIFI_PASSWORD_LEN_MAX);
+    }
+
+    n++;
+  }
+
+  if ((0 != _ssid[0]) && (0 != _pass[0])) {
+    xEventGroupSetBits(_sync_event_group, SYNC_BIT);
+  }
+}
+
+void
+_ble_read_callback(uint8_t * buf, uint16_t * len, uint16_t max_len)
+{
+  sprintf((char *) buf, "{\n\"uuid\": \"%s\"\n}", _uuid_start);
+  LOGI("sending...\n%s", (char *) buf);
 }
 
 static void
-_config_rx(uint8_t * buf, uint32_t len)
+_ble_config_wifi_credentials_task(void * arg)
 {
-	const uint32_t tx_len_max = BUFFER_LENGTH / 2;
-	uint32_t tx_len = 0;
-	uint8_t * tx = _buffer;
+  EventBits_t bits = 0;
+  bool r = true;
 
-	bool r = true;
+  memset(_ssid, 0, WIFI_SSID_LEN_MAX);
+  memset(_pass, 0, WIFI_PASSWORD_LEN_MAX);
 
-	if (r) {
-		r = message_client_write(buf, len);
-	}
+  r = ble_init();
+  if (!r) {
+    ESP_LOGE(__func__, "ble_init() failed!\n");
+  }
 
-	if (r) {
-		r = message_device_response(tx, &tx_len, tx_len_max);
-	}
+  ble_register_write_callback(_ble_write_callback);
+  ble_register_read_callback(_ble_read_callback);
 
-	if ((r) && (_config_tx)) {
-		r = _config_tx(tx, tx_len);
-	}
+  // Wait for BLE config to complete.
+  bits = xEventGroupWaitBits(
+    _sync_event_group,
+    SYNC_BIT,
+    false,
+    true,
+    portMAX_DELAY);
 
-	if (message_is_client_done()) {
-		// TODO: Need to delay until last Tx message is sent???
-		vTaskDelay(5000 / portTICK_PERIOD_MS);
-		_is_config = false;
-	}
+  {
+    enum peep_state state = PEEP_STATE_MEASURE_CONFIG;
+    memory_set_item(
+      MEMORY_ITEM_WIFI_SSID,
+      (uint8_t *) _ssid,
+      WIFI_SSID_LEN_MAX);
+
+    memory_set_item(
+      MEMORY_ITEM_WIFI_PASS,
+      (uint8_t *) _pass,
+      WIFI_PASSWORD_LEN_MAX);
+
+    memory_set_item(
+      MEMORY_ITEM_STATE,
+      (uint8_t *) &state,
+      sizeof(enum peep_state));
+  }
+
+  _deep_sleep(0);
 }
 
 static void
-_state_ble_config(void)
+_measure_task(void * arg)
 {
-	uint32_t half = BUFFER_LENGTH / 2;
-	bool r = true;
+  char * root_ca = (char *) _root_ca_start;
+  char * cert = (char *) _cert_start;
+  char * key = (char *) _key_start;
+  char * ssid = _ssid;
+  char * pass = _pass;
+  char * msg = (char *) &_buffer[0];
+  float temperature = 0.0;
+  float humidity = 0.0;
+  float pressure = 0.0;
+  float gas_resistance = 0.0;
+  bool r = true;
+  int len = 0;
 
-	_is_config = true;
-	r = ble_enable(_buffer, half);
-	RESULT_TEST_ERROR_TRACE(r, "failed to enable BLE\n");
+  LOGI("start");
 
-	if (r) {
-		r = message_init(_buffer + half, half);
-	}
+  if (r) {
+    len = memory_get_item(
+      MEMORY_ITEM_WIFI_SSID,
+      (uint8_t *) ssid,
+      WIFI_SSID_LEN_MAX);
+    if (len <= 0) {
+      r = false;
+    }
+    else {
+      LOGI("SSID = %s\n", ssid);
+    }
+  }
 
-	while (_is_config) {
-		// TODO: better sleep mechanism
-		vTaskDelay(1000 / portTICK_PERIOD_MS);
-	}
+  if (r) {
+    len = memory_get_item(
+      MEMORY_ITEM_WIFI_PASS,
+      (uint8_t *) pass,
+      WIFI_PASSWORD_LEN_MAX);
+    if (len <= 0) {
+      r = false;
+    }
+    else {
+      LOGI("PASS = %s\n", pass);
+    }
+  }
 
-	r = ble_disable();
-	if (!r) {
-		printf("failed to disable BLE\n");
-	}
-	_deep_sleep(0);
+  if (r) {
+    r = hal_init();
+  }
+
+  if (r) {
+    r = wifi_connect(ssid, pass);
+  }
+
+  if (r) {
+    r = aws_mqtt_init(root_ca, cert, key, (char*) _uuid_start);
+  }
+
+  if (r) {
+    r = hal_read_temperature_humdity_pressure_resistance(
+      &temperature,
+      &humidity,
+      &pressure,
+      &gas_resistance);
+  }
+
+  if (r) {
+    sprintf(
+      msg,
+      "{\n"
+      "\"uuid\": \"%s\",\n"
+      "\"temperature\": %f,\n"
+      "\"humidity\": %f,\n"
+      "\"pressure\": %f,\n"
+      "\"gas resistance\": %f\n"
+      "}",
+      (const char *) _uuid_start,
+      temperature,
+      humidity,
+      pressure,
+      gas_resistance);
+
+    r = aws_mqtt_publish("hatchtrack/data/put", msg, false);
+  }
+
+  _deep_sleep(_MEASURE_INTERVAL_SEC);
 }
 
 static void
-_state_uart_config(void)
+_measure_config_cb(uint8_t * buf, uint16_t len)
 {
-	uint32_t half = BUFFER_LENGTH / 2;
-	bool r = true;
+  memcpy(_buffer, buf, len);
+  _buffer[len] = 0;
 
-	_is_config = true;
-
-	if (r) {
-		r = message_init(_buffer + half, half);
-	}
-
-	if (r) {
-		uart_server_register_rx_callback(_config_rx);
-		_config_tx = uart_server_tx;
-	}
-
-	if (r) {
-		r = uart_server_enable(_buffer, half);
-		RESULT_TEST_ERROR_TRACE(r, "failed to enable UART\n");
-	}
-
-	while (_is_config) {
-		// TODO: better sleep mechanism
-		vTaskDelay(1000 / portTICK_PERIOD_MS);
-	}
-
-	r = uart_server_disable();
-	if (!r) {
-		printf("failed to disable uart!\n");
-	}
-	_deep_sleep(0);
+  printf("%s\n", _buffer);
 }
 
 static void
-_state_measure(void)
+_measure_config_task(void * arg)
 {
-	char * id = (char *) &_buffer[BUFFER_LENGTH / 2];
-	char * msg = (char *) &_buffer[0];
-	float temperature = 0.0;
-	float humidity = 0.0;
-	int len = 0;
-	uint32_t n = 0;
-	bool r = true;
+  EventBits_t bits = 0;
+  char * root_ca = (char *) _root_ca_start;
+  char * cert = (char *) _cert_start;
+  char * key = (char *) _key_start;
+  char * ssid = _ssid;
+  char * pass = _pass;
+  bool r = true;
+  int len = 0;
 
-	if (r) {
-		r = sensor_init();
-	}
+  LOGI("start");
 
-	if (r) {
-		r = sensor_measure(&temperature, &humidity);
-	}
+  if (r) {
+    len = memory_get_item(
+      MEMORY_ITEM_WIFI_SSID,
+      (uint8_t *) ssid,
+      WIFI_SSID_LEN_MAX);
+    if (len <= 0) {
+      r = false;
+    }
+    else {
+      LOGI("SSID = %s\n", ssid);
+    }
+  }
 
-	if (r) {
-		len = memory_get_item(MEMORY_ITEM_MEASURE_COUNT, (uint8_t *) &n, sizeof(n));
-		if (sizeof(n) == len) {
-			n -= 1;
-			printf("[%s] : %d measurements left\n", __func__, n);
-			memory_set_item(MEMORY_ITEM_MEASURE_COUNT, (uint8_t *) &n, sizeof(n));
-			if (0 == n) {
-				peep_set_state(PEEP_STATE_UART_CONFIG);
-			}
-		}
-	}
+  if (r) {
+    len = memory_get_item(
+      MEMORY_ITEM_WIFI_PASS,
+      (uint8_t *) pass,
+      WIFI_PASSWORD_LEN_MAX);
+    if (len <= 0) {
+      r = false;
+    }
+    else {
+      LOGI("PASS = %s\n", pass);
+    }
+  }
 
-	if (r) {
-		r = wifi_connect();
-	}
+  if (r) {
+    r = hal_init();
+  }
 
-	if (r) {
-		r = aws_connect(_buffer, 8192);
-	}
+  if (r) {
+    r = wifi_connect(ssid, pass);
+  }
 
-	if (r) {
-		len = memory_get_item(MEMORY_ITEM_UUID, (uint8_t *) id, BUFFER_LENGTH / 2);
-		if (0 >= len) {
-			r = false;
-		}
-		else {
-			id[len] = '\0';
-		}
-	}
+  if (r) {
+    r = aws_mqtt_init(root_ca, cert, key, (char*) _uuid_start);
+  }
 
-	if (r) {
-		sprintf(
-			msg,
-			"{\n"
-			"\"hatch\": \"%s\",\n"
-			"\"time\": %d,\n"
-			"\"temperature\": %f,\n"
-			"\"humidity\": %f\n"
-			"}",
-			id,
-			(int) time(NULL),
-			temperature,
-			humidity);
+  if (r) {
+    r = aws_mqtt_subsribe("hatchtrack/data/put", _measure_config_cb);
+  }
 
-		if (true != aws_publish_json((uint8_t *) msg, strlen(msg))) {
-			printf("Failed to publish message!\n");
-		}
-	}
+  while (1) {
+    aws_mqtt_subsribe_poll(1000);
 
-	if (r) {
-		len = memory_get_item(MEMORY_ITEM_MEASURE_SEC, (uint8_t *) &n, sizeof(n));
-		if (sizeof(n) != len) {
-			n = 15 * 60; // TODO: default to 15 minutes?
-			printf("failed to read Peep measure delay, default to %d seconds\n", n);
-		}
-	}
+    // Wait for BLE config to complete.
+    bits = xEventGroupWaitBits(
+      _sync_event_group,
+      SYNC_BIT,
+      false,
+      true,
+      0);
+  }
 
-	if (r) {
-		_deep_sleep(n);
-	}
-	else {
-		//peep_set_state(PEEP_STATE_UART_CONFIG);
-		_deep_sleep(0);
-	}
+  _deep_sleep(_MEASURE_INTERVAL_SEC);
 }
 
 /***** Global Functions *****/
@@ -220,32 +346,55 @@ _state_measure(void)
 void
 app_main()
 {
-	enum peep_state state = PEEP_STATE_UNKNOWN;
-	bool r = true;
+  enum peep_state state = PEEP_STATE_UNKNOWN;
+  bool r = true;
+  int32_t len = 0;
 
-	nvs_flash_init();
-	led_init();
-	r = memory_init();
-	RESULT_TEST_ERROR_TRACE(r, "failed to initialize memory\n");
+  _sync_event_group = xEventGroupCreate();
 
-	r = peep_get_state(&state);
-	if ((false == r) || (PEEP_STATE_UNKNOWN == state)) {
-		state = PEEP_STATE_UART_CONFIG;
-		peep_set_state(state);
-	}
+  nvs_flash_init();
 
-	if (PEEP_STATE_BLE_CONFIG == state) {
-		printf("PEEP_STATE_BLE_CONFIG\n");
-		_state_ble_config();
-	}
-	else if (PEEP_STATE_UART_CONFIG == state) {
-		printf("PEEP_STATE_UART_CONFIG\n");
-		_state_uart_config();
-	}
-	else if (PEEP_STATE_MEASURE == state) {
-		printf("PEEP_STATE_MEASURE\n");
-		_state_measure();
-	}
+  r = memory_init();
+  RESULT_TEST_ERROR_TRACE(r);
 
-	// should not return from above code...
+  len = memory_get_item(
+    MEMORY_ITEM_STATE,
+    (uint8_t * ) &state,
+    sizeof(enum peep_state));
+
+  if (sizeof(enum peep_state) != len) {
+    state = PEEP_STATE_BLE_CONFIG;
+    memory_set_item(
+      MEMORY_ITEM_STATE,
+      (uint8_t *) &state,
+      sizeof(enum peep_state));
+  }
+
+  if (PEEP_STATE_BLE_CONFIG == state) {
+    xTaskCreate(
+      _ble_config_wifi_credentials_task,
+      "ble config task",
+      8192,
+      NULL,
+      2,
+      NULL);
+  }
+  else if (PEEP_STATE_MEASURE == state) {
+    xTaskCreate(
+      _measure_task,
+      "measurement task",
+      8192,
+      NULL,
+      2,
+      NULL);
+  }
+  else if (PEEP_STATE_MEASURE_CONFIG == state) {
+    xTaskCreate(
+      _measure_config_task,
+      "measurement config task",
+      8192,
+      NULL,
+      2,
+      NULL);
+  }
 }

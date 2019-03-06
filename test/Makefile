@@ -1,19 +1,18 @@
-export IDF_PATH := ./esp-idf
-PROJECT_NAME := hatchtrack-peep-fw
+export IDF_PATH :=  $(realpath ..)/lib/esp-idf
+
+PROJECT_NAME := hatchtrack-peep-unit-test-fw
 
 EXTRA_COMPONENT_DIRS := \
-  ble \
-  bme680 \
-  hal \
-  iot \
-  icm20602 \
-  peep \
-  protobuf \
-  wifi
+  $(realpath ..)/bme680 \
+  $(realpath ..)/icm20602 \
+  $(realpath ..)/hal \
+  $(realpath ..)/peep \
+  $(realpath ..)/protobuf
 
 include $(IDF_PATH)/make/project.mk
 
 CFLAGS += -DPB_BUFFER_ONLY -DPB_FIELD_32BIT=1
+CFLAGS += -DPEEP_UNIT_TEST_BUILD
 
 distclean: clean
 	rm -f sdkconfig.old

@@ -1,9 +1,16 @@
 COMPONENT_PRIV_INCLUDEDIRS := \
-	. \
-	../bme680 \
-	../protobuf \
-	../lib/hatchtrack-peep-protobuf/header
+  . \
+  ../ble \
+  ../bme680 \
+  ../hal \
+  ../iot \
+  ../peep \
+  ../wifi
 
-CFLAGS += -DPB_BUFFER_ONLY -DPB_FIELD_32BIT=1
-
-
+COMPONENT_EMBED_TXTFILES := \
+  uuid.txt \
+  wifi_ssid.txt \
+  wifi_pass.txt \
+  root_ca.txt \
+  cert.txt \
+  key.txt

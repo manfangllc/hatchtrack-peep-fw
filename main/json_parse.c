@@ -50,10 +50,10 @@ json_parse_wifi_credentials_msg(char * js, char * ssid, uint32_t ssid_max_len,
     key[key_length] = '\0';
     LOGI("decoded: %s = %s\n", key, value);
 
-    if (0 == strcmp(key, "ssid")) {
+    if (0 == strcasecmp(key, "wifiSSID")) {
       strncpy(ssid, value, ssid_max_len);
     }
-    else if (0 == strcmp(key, "password")) {
+    else if (0 == strcasecmp(key, "wifiPassword")) {
       strncpy(pass, value, pass_max_len);
     }
 

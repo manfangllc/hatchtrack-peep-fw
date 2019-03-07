@@ -8,7 +8,6 @@ EXTRA_COMPONENT_DIRS := \
   iot \
   icm20602 \
   peep \
-  protobuf \
   wifi
 
 include $(IDF_PATH)/make/project.mk

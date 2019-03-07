@@ -1,9 +1,13 @@
 /***** Includes *****/
 
 #include <string.h>
+#include <time.h>
+#include <sys/time.h>
+
+#include "lwip/apps/sntp.h"
 
 #include "nvs_flash.h"
-#include "jsmn.h"
+#include "json_parse.h"
 #include "system.h"
 #include "aws-mqtt.h"
 #include "ble_server.h"
@@ -62,60 +66,61 @@ _deep_sleep(uint32_t sec)
   esp_deep_sleep_start();
 }
 
+static bool
+init_time(void)
+{
+  const int retry_max = 10;
+  struct tm timeinfo = {0};
+  time_t now = 0;
+  int retry = 0;
+  bool r = true;
+
+  time(&now);
+  localtime_r(&now, &timeinfo);
+  // Is time set? If not, tm_year will be (1970 - 1900).
+  if (timeinfo.tm_year < (2016 - 1900)) {
+    LOGI("time not set, initializing SNTP");
+    sntp_setoperatingmode(SNTP_OPMODE_POLL);
+    sntp_setservername(0, "pool.ntp.org");
+    sntp_init();
+
+    // wait for time to be set
+    while(timeinfo.tm_year < (2016 - 1900) && ++retry < retry_max) {
+      LOGI("waiting for time to sync... (%d/%d)", retry, retry_max);
+      vTaskDelay(2000 / portTICK_PERIOD_MS);
+      time(&now);
+      localtime_r(&now, &timeinfo);
+    }
+  }
+
+  if (retry < retry_max) {
+    LOGI(
+      "%d-%d-%d %d:%d:%d",
+      timeinfo.tm_year + 1900,
+      timeinfo.tm_mon + 1,
+      timeinfo.tm_mday,
+      timeinfo.tm_hour,
+      timeinfo.tm_min,
+      timeinfo.tm_sec);
+    r = true;
+  }
+  else {
+    LOGE("failed to sync time");
+    r = false;
+  }
+
+  return r;
+}
+
 void
 _ble_write_callback(uint8_t * buf, uint16_t len)
 {
-  static char key[128];
-  static char value[128];
-  jsmntok_t t[16];
-  jsmn_parser p;
-  const char * js;
-  jsmntok_t json_value;
-  jsmntok_t json_key;
-  int string_length;
-  int key_length;
-  int idx;
-  int n;
-  int r;
-
-  jsmn_init(&p);
-
-  js = (const char *) buf;
-  r = jsmn_parse(&p, js, strlen(js), t, sizeof(t)/(sizeof(t[0])));
-
-   /* Assume the top-level element is an object */
-  if ((r < 1) || (t[0].type != JSMN_OBJECT)) {
-    printf("Object expected\n");
-    return;
-  }
-
-  for (n = 1; n < r; n++) {
-    json_value = t[n+1];
-    json_key = t[n];
-    string_length = json_value.end - json_value.start;
-    key_length = json_key.end - json_key.start;
-
-    for (idx = 0; idx < string_length; idx++){
-      value[idx] = js[json_value.start + idx];
-    }
-
-    for (idx = 0; idx < key_length; idx++){
-      key[idx] = js[json_key.start + idx];
-    }
-
-    value[string_length] = '\0';
-    key[key_length] = '\0';
-    LOGI("decoded: %s = %s\n", key, value);
-
-    if (0 == strcmp(key, "ssid")) {
-      strncpy(_ssid, value, WIFI_SSID_LEN_MAX);
-    }
-    else if (0 == strcmp(key, "password")) {
-      strncpy(_pass, value, WIFI_PASSWORD_LEN_MAX);
-    }
-
-    n++;
-  }
+  json_parse_wifi_credentials_msg(
+    (char *) buf,
+    _ssid,
+    WIFI_SSID_LEN_MAX,
+    _pass,
+    WIFI_PASSWORD_LEN_MAX);
 
   if ((0 != _ssid[0]) && (0 != _pass[0])) {
     xEventGroupSetBits(_sync_event_group, SYNC_BIT);
@@ -140,7 +145,7 @@ _ble_config_wifi_credentials_task(void * arg)
 
   r = ble_init();
   if (!r) {
-    ESP_LOGE(__func__, "ble_init() failed!\n");
+    LOGE("failed to initialize bluetooth");
   }
 
   ble_register_write_callback(_ble_write_callback);
@@ -161,10 +166,16 @@ _ble_config_wifi_credentials_task(void * arg)
       (uint8_t *) _ssid,
       WIFI_SSID_LEN_MAX);
 
+    // feed watchdog
+    vTaskDelay(10);
+
     memory_set_item(
       MEMORY_ITEM_WIFI_PASS,
       (uint8_t *) _pass,
       WIFI_PASSWORD_LEN_MAX);
+
+    // feed watchdog
+    vTaskDelay(10);
 
     memory_set_item(
       MEMORY_ITEM_STATE,
@@ -202,7 +213,7 @@ _measure_task(void * arg)
       r = false;
     }
     else {
-      LOGI("SSID = %s\n", ssid);
+      LOGI("SSID = %s", ssid);
     }
   }
 
@@ -215,7 +226,7 @@ _measure_task(void * arg)
       r = false;
     }
     else {
-      LOGI("PASS = %s\n", pass);
+      LOGI("PASS = %s", pass);
     }
   }
 
@@ -274,11 +285,13 @@ static void
 _measure_config_task(void * arg)
 {
   EventBits_t bits = 0;
+  char * mqtt_topic = "hatchtrack/data/put";
   char * root_ca = (char *) _root_ca_start;
   char * cert = (char *) _cert_start;
   char * key = (char *) _key_start;
   char * ssid = _ssid;
   char * pass = _pass;
+  bool is_configured = false;
   bool r = true;
   int len = 0;
 
@@ -319,23 +332,33 @@ _measure_config_task(void * arg)
   }
 
   if (r) {
+    r = init_time();
+  }
+
+  if (r) {
     r = aws_mqtt_init(root_ca, cert, key, (char*) _uuid_start);
   }
 
   if (r) {
-    r = aws_mqtt_subsribe("hatchtrack/data/put", _measure_config_cb);
+    r = aws_mqtt_subsribe(mqtt_topic, _measure_config_cb);
   }
 
-  while (1) {
-    aws_mqtt_subsribe_poll(1000);
+  while ((r) && (!is_configured)) {
+    bits = 0;
+    while (0 == (bits & SYNC_BIT)) {
+      aws_mqtt_subsribe_poll(1000);
 
-    // Wait for BLE config to complete.
-    bits = xEventGroupWaitBits(
-      _sync_event_group,
-      SYNC_BIT,
-      false,
-      true,
-      0);
+      // Wait for BLE config to complete.
+      bits = xEventGroupWaitBits(
+        _sync_event_group,
+        SYNC_BIT,
+        false,
+        true,
+        1000 / portTICK_PERIOD_MS);
+    }
+
+    aws_mqtt_unsubscribe(mqtt_topic);
+
   }
 
   _deep_sleep(_MEASURE_INTERVAL_SEC);

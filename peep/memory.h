@@ -16,7 +16,6 @@ enum memory_item {
   MEMORY_ITEM_WIFI_SSID,      // string
   MEMORY_ITEM_WIFI_PASS,      // string
   MEMORY_ITEM_HATCH_CONFIG,   // struct hatch_configuration
-  
 };
 
 /***** Global Functions *****/

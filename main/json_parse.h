@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "hatch_config.h"
+
 /***** Global Functions *****/
 
 /**
@@ -26,5 +28,9 @@ json_parse_wifi_credentials_msg(char * js, char * ssid, uint32_t ssid_max_len,
  *    "measureIntervalSec", 900
  * }
  */
+
+extern bool
+json_parse_wifi_credentials_msg(char * js, char * ssid, uint32_t ssid_max_len,
+  char * pass, uint32_t pass_max_len);
 
 #endif

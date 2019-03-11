@@ -335,6 +335,21 @@ hal_init(void)
   return r;
 }
 
+void
+hal_deep_sleep(uint32_t sec)
+{
+  esp_err_t r = ESP_OK;
+  uint64_t wakeup_time_usec = sec * 1000000;
+
+  LOGI("Entering %d second deep sleep\n", sec);
+
+  r = esp_sleep_enable_timer_wakeup(wakeup_time_usec);
+  RESULT_TEST((ESP_OK == r), "failed to set wakeup timer");
+
+  // Will not return from the above function.
+  esp_deep_sleep_start();
+}
+
 bool
 hal_read_temperature_humdity_pressure_resistance(float * p_temperature,
   float * p_humidity, float * p_pressure, float * p_gas_resistance)

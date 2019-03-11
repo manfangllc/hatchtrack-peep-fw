@@ -50,4 +50,10 @@
     } \
   }
 
+#define LOGE_TRAP(format, ...) \
+  while (1) { \
+    ESP_LOG_LEVEL_LOCAL(ESP_LOG_ERROR, __func__, format, ##__VA_ARGS__); \
+    vTaskDelay(1000 / portTICK_PERIOD_MS); \
+  }
+
 #endif

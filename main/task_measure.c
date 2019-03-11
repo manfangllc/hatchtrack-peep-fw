@@ -35,7 +35,6 @@ static uint8_t * _buffer = NULL;
 static char * _ssid = NULL;
 static char * _pass = NULL;
 
-
 /***** Global Functions *****/
 
 void

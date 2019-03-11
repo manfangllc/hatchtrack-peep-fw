@@ -15,8 +15,7 @@ enum memory_item {
   MEMORY_ITEM_DATA_LOG,       // TODO
   MEMORY_ITEM_WIFI_SSID,      // string
   MEMORY_ITEM_WIFI_PASS,      // string
-  MEMORY_ITEM_MEASURE_COUNT,  // uint32_t
-  MEMORY_ITEM_MEASURE_SEC,    // uint32_t
+  MEMORY_ITEM_HATCH_CONFIG,   // struct hatch_configuration
 };
 
 /***** Global Functions *****/

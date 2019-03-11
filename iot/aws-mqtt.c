@@ -110,12 +110,11 @@ aws_mqtt_init(char * root_ca, char * client_cert, char * client_key,
   }
 
   if (r) {
-    printf("Connecting to AWS...");
+    LOGI("Connecting to AWS...");
     do {
       err = aws_iot_mqtt_connect(&_client, &connect_params);
       if(SUCCESS != err) {
-        ESP_LOGE(
-          __func__,
+        LOGE(
           "Error(%d) connecting to %s:%d",
           err,
           mqtt_params.pHostURL,
@@ -123,7 +122,7 @@ aws_mqtt_init(char * root_ca, char * client_cert, char * client_key,
         vTaskDelay(1000 / portTICK_RATE_MS);
       }
     } while (SUCCESS != err);
-    printf("Connected to AWS!\n");
+    LOGI("Connected to AWS!\n");
   }
 
   return r;
@@ -191,6 +190,20 @@ aws_mqtt_subsribe_poll(uint32_t poll_ms)
   rc = aws_iot_mqtt_yield(&_client, poll_ms);
   if(SUCCESS != rc) {
     LOGE("Error polling : %d", rc);
+    return false;
+  }
+
+  return true;
+}
+
+bool
+aws_mqtt_unsubscribe(char * topic)
+{
+  IoT_Error_t rc = FAILURE;
+
+  rc = aws_iot_mqtt_unsubscribe(&_client, topic, strlen(topic));
+  if(SUCCESS != rc) {
+    LOGE("Error unsubsribe : %d", rc);
     return false;
   }
 

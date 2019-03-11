@@ -22,8 +22,7 @@ static char * _file_lut[] = {
   "/p/data", // MEMORY_ITEM_DATA_LOG
   "/p/ssid", // MEMORY_ITEM_WIFI_SSID
   "/p/pass", // MEMORY_ITEM_WIFI_PASS
-  "/p/mcnt", // MEMORY_ITEM_MEASURE_COUNT
-  "/p/msec", // MEMORY_ITEM_MEASURE_SEC
+  "/p/hatch", // MEMORY_ITEM_HATCH_CONFIG
 };
 
 /***** Global Functions *****/

@@ -204,14 +204,16 @@ task_measure(void * arg)
     r = hal_init();
   }
 
-  if (r) {
+  if (r && !is_local_measure) {
     r = wifi_connect(ssid, pass, 15);
     is_local_measure = (r) ? false : true;
+    r = true;
   }
 
-  if (r) {
+  if (r && !is_local_measure) {
     r = aws_mqtt_init(root_ca, cert, key, (char*) _uuid_start, 5);
     is_local_measure = (r) ? false : true;
+    r = true;
   }
 
   if (r) {

@@ -4,12 +4,18 @@
 #include <time.h>
 #include <sys/time.h>
 
+#include "lwip/apps/sntp.h"
+
 #include "wifi.h"
 #include "system.h"
 #include "freertos/event_groups.h"
 #include "esp_wifi.h"
 #include "esp_event_loop.h"
 #include "lwip/err.h"
+
+/***** Defines *****/
+
+#define POLL_SEC (1)
 
 /***** Local Data *****/
 
@@ -72,16 +78,62 @@ _event_handler(void *ctx, system_event_t *event)
   return ESP_OK;
 }
 
+static bool
+_init_time(int32_t timeout_sec)
+{
+  const TickType_t poll_ticks = (POLL_SEC * 1000) / portTICK_PERIOD_MS;
+  const int retry_max = timeout_sec / POLL_SEC;
+  struct tm timeinfo = {0};
+  time_t now = 0;
+  int retry = 0;
+  bool r = true;
+
+  time(&now);
+  localtime_r(&now, &timeinfo);
+  // Is time set? If not, tm_year will be (1970 - 1900).
+  if (timeinfo.tm_year < (2016 - 1900)) {
+    LOGI("time not set, initializing SNTP");
+    sntp_setoperatingmode(SNTP_OPMODE_POLL);
+    sntp_setservername(0, "pool.ntp.org");
+    sntp_init();
+
+    // wait for time to be set
+    while(timeinfo.tm_year < (2016 - 1900) && ++retry < retry_max) {
+      LOGI("waiting for time to sync... (%d/%d)", retry, retry_max);
+      vTaskDelay(poll_ticks);
+      time(&now);
+      localtime_r(&now, &timeinfo);
+    }
+  }
+
+  if (retry < retry_max) {
+    LOGI(
+      "%d-%d-%d %d:%d:%d",
+      timeinfo.tm_year + 1900,
+      timeinfo.tm_mon + 1,
+      timeinfo.tm_mday,
+      timeinfo.tm_hour,
+      timeinfo.tm_min,
+      timeinfo.tm_sec);
+    r = true;
+  }
+  else {
+    LOGE("failed to sync time");
+    r = false;
+  }
+
+  return r;
+}
+
 /***** Global Functions *****/
 
 bool
-wifi_connect(char * ssid, char * password)
+wifi_connect(char * ssid, char * password, int32_t timeout_sec)
 {
-  const TickType_t wifi_connect_timeout = 60000 / portTICK_PERIOD_MS;
+  const TickType_t poll_ticks = (POLL_SEC * 1000) / portTICK_PERIOD_MS;
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
   wifi_config_t wifi_config;
   EventBits_t bits = 0;
-  int32_t len = 0;
   bool r = true;
 
   // IF YOU DON'T DO THIS, YOU WILL HAVE A GARBAGE FILLED STRUCT
@@ -100,13 +152,19 @@ wifi_connect(char * ssid, char * password)
     ESP_ERROR_CHECK( esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
     ESP_ERROR_CHECK( esp_wifi_start() );
 
-    /* Wait for WiFI to show as connected */
-    bits = xEventGroupWaitBits(
-      wifi_event_group,
-      WIFI_CONNECTED_BIT,
-      false,
-      true,
-      wifi_connect_timeout);
+    while ((0 == (bits & WIFI_CONNECTED_BIT)) && (timeout_sec > 0)) {
+      /* Wait for WiFI to show as connected */
+      bits = xEventGroupWaitBits(
+        wifi_event_group,
+        WIFI_CONNECTED_BIT,
+        false,
+        true,
+        poll_ticks);
+      
+      if (0 == (bits & WIFI_CONNECTED_BIT)) {
+        timeout_sec -= POLL_SEC;
+      }
+    }
 
     if (bits & WIFI_CONNECTED_BIT) {
       ESP_LOGI(__func__, "connected to SSID %s", wifi_config.sta.ssid);
@@ -115,6 +173,10 @@ wifi_connect(char * ssid, char * password)
       ESP_LOGE(__func__, "failed to connect to SSID %s", wifi_config.sta.ssid);
       r = false;
     }
+  }
+
+  if (r) {
+    r = _init_time(timeout_sec);
   }
 
   return r;

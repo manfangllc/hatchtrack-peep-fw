@@ -7,6 +7,7 @@
 #include "nvs_flash.h"
 
 #include "memory.h"
+#include "memory_measurement_db.h"
 #include "state.h"
 #include "system.h"
 #include "tasks.h"
@@ -24,10 +25,17 @@ app_main()
   r = memory_init();
   RESULT_TEST_ERROR_TRACE(r);
 
+  r = memory_measurement_db_init();
+  RESULT_TEST_ERROR_TRACE(r);
+
+#ifdef PEEP_TEST_STATE_MEASURE
+  state = PEEP_STATE_MEASURE;
+#else
   len = memory_get_item(
     MEMORY_ITEM_STATE,
     (uint8_t * ) &state,
     sizeof(enum peep_state));
+
 
   if (sizeof(enum peep_state) != len) {
     state = PEEP_STATE_BLE_CONFIG;
@@ -36,6 +44,7 @@ app_main()
       (uint8_t *) &state,
       sizeof(enum peep_state));
   }
+#endif
 
   if (PEEP_STATE_BLE_CONFIG == state) {
     xTaskCreate(
@@ -50,7 +59,7 @@ app_main()
     xTaskCreate(
       task_measure,
       "measurement task",
-      8192,
+      40960,
       NULL,
       2,
       NULL);

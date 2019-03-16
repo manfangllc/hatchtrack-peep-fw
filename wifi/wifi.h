@@ -14,7 +14,7 @@
 /***** Global Functions *****/
 
 extern bool
-wifi_connect(char * ssid, char * password);
+wifi_connect(char * ssid, char * password, int32_t timeout_sec);
 
 extern bool
 wifi_disconnect(void);

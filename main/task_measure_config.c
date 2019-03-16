@@ -1,7 +1,5 @@
 /***** Includes *****/
 
-#include "lwip/apps/sntp.h"
-
 #include "tasks.h"
 #include "aws-mqtt.h"
 #include "hal.h"
@@ -38,52 +36,6 @@ static EventGroupHandle_t _sync_event_group = NULL;
 static const int SYNC_BIT = BIT0;
 
 /***** Local Functions *****/
-
-static bool
-_init_time(void)
-{
-  const int retry_max = 10;
-  struct tm timeinfo = {0};
-  time_t now = 0;
-  int retry = 0;
-  bool r = true;
-
-  time(&now);
-  localtime_r(&now, &timeinfo);
-  // Is time set? If not, tm_year will be (1970 - 1900).
-  if (timeinfo.tm_year < (2016 - 1900)) {
-    LOGI("time not set, initializing SNTP");
-    sntp_setoperatingmode(SNTP_OPMODE_POLL);
-    sntp_setservername(0, "pool.ntp.org");
-    sntp_init();
-
-    // wait for time to be set
-    while(timeinfo.tm_year < (2016 - 1900) && ++retry < retry_max) {
-      LOGI("waiting for time to sync... (%d/%d)", retry, retry_max);
-      vTaskDelay(2000 / portTICK_PERIOD_MS);
-      time(&now);
-      localtime_r(&now, &timeinfo);
-    }
-  }
-
-  if (retry < retry_max) {
-    LOGI(
-      "%d-%d-%d %d:%d:%d",
-      timeinfo.tm_year + 1900,
-      timeinfo.tm_mon + 1,
-      timeinfo.tm_mday,
-      timeinfo.tm_hour,
-      timeinfo.tm_min,
-      timeinfo.tm_sec);
-    r = true;
-  }
-  else {
-    LOGE("failed to sync time");
-    r = false;
-  }
-
-  return r;
-}
 
 static void
 _measure_config_cb(uint8_t * buf, uint16_t len)
@@ -151,15 +103,11 @@ task_measure_config(void * arg)
   }
 
   if (r) {
-    r = wifi_connect(ssid, pass);
+    r = wifi_connect(ssid, pass, 15);
   }
 
   if (r) {
-    r = _init_time();
-  }
-
-  if (r) {
-    r = aws_mqtt_init(root_ca, cert, key, (char*) _uuid_start);
+    r = aws_mqtt_init(root_ca, cert, key, (char*) _uuid_start, 5);
   }
 
   if (r) {

@@ -7,7 +7,7 @@
 
 /***** Local Data *****/
 
-static SemaphoreHandle_t _mutex;
+static SemaphoreHandle_t _mutex = NULL;
 
 static char * _file_lut[] = {
   /*
@@ -44,21 +44,24 @@ memory_init(void)
     // Note: esp_vfs_spiffs_register is an all-in-one convenience function.
     err = esp_vfs_spiffs_register(&conf);
     if (err == ESP_FAIL) {
-      printf("Failed to mount or format filesystem\n");
+      LOGE("Failed to mount or format filesystem");
       r = false;
     }
     else if (err == ESP_ERR_NOT_FOUND) {
-      printf("Failed to find SPIFFS partition\n");
+      LOGE("Failed to find SPIFFS partition");
       r = false;
     }
     else if (err != ESP_OK) {
-      printf("Failed to initialize SPIFFS (%d)\n", err);
+      LOGE("Failed to initialize SPIFFS (%d)", err);
       r = false;
     }
   }
 
   if (r) {
     _mutex = xSemaphoreCreateMutex();
+    if (NULL == _mutex) {
+      r = false;
+    }
   }
 
   // TODO: Remove this...
@@ -66,10 +69,10 @@ memory_init(void)
     size_t total = 0, used = 0;
     err = esp_spiffs_info(NULL, &total, &used);
     if (err != ESP_OK) {
-      printf("Failed to get SPIFFS partition information\n");
+      LOGE("Failed to get SPIFFS partition information");
     }
     else {
-      printf("Partition size: total: %d, used: %d\n", total, used);
+      LOGI("Partition size: total: %d, used: %d", total, used);
     }
   }
 
@@ -84,7 +87,7 @@ memory_get_item(enum memory_item item, uint8_t * dst, uint32_t len)
   bool r = true;
 
   if (item <= MEMORY_ITEM_INVALID) {
-    printf("item = %d\n", item);
+    LOGE("item = %d", item);
     r = false;
   }
 
@@ -92,7 +95,7 @@ memory_get_item(enum memory_item item, uint8_t * dst, uint32_t len)
     if (r) {
       fp = fopen(_file_lut[item], "r");
       if (!fp) {
-        printf("failed to open %s\n", _file_lut[item]);
+        LOGE("failed to open %s", _file_lut[item]);
         r = false;
       }
     }
@@ -125,7 +128,7 @@ memory_set_item(enum memory_item item, uint8_t * src, uint32_t len)
     if (r) {
       fp = fopen(_file_lut[item], "w");
       if (NULL == fp) {
-        printf("failed to open %s\n", _file_lut[item]);
+        LOGE("failed to open %s", _file_lut[item]);
         r = false;
       }
     }

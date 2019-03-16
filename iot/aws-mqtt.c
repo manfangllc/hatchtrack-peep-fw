@@ -77,7 +77,7 @@ void _subscribe_callback_handler(AWS_IoT_Client * p_client, char * topic,
 
 bool
 aws_mqtt_init(char * root_ca, char * client_cert, char * client_key, 
-  char * client_id)
+  char * client_id, int32_t timeout_sec)
 {
   IoT_Client_Init_Params mqtt_params = iotClientInitParamsDefault;
   IoT_Client_Connect_Params connect_params = iotClientConnectParamsDefault;
@@ -112,8 +112,10 @@ aws_mqtt_init(char * root_ca, char * client_cert, char * client_key,
   if (r) {
     LOGI("Connecting to AWS...");
     do {
+      r = true;
       err = aws_iot_mqtt_connect(&_client, &connect_params);
       if(SUCCESS != err) {
+        r = false;
         LOGE(
           "Error(%d) connecting to %s:%d",
           err,
@@ -121,7 +123,7 @@ aws_mqtt_init(char * root_ca, char * client_cert, char * client_key,
           mqtt_params.port);
         vTaskDelay(1000 / portTICK_RATE_MS);
       }
-    } while (SUCCESS != err);
+    } while ((SUCCESS != err) && ((--timeout_sec) > 0));
     LOGI("Connected to AWS!\n");
   }
 

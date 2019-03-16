@@ -1,13 +1,13 @@
-export IDF_PATH :=  $(realpath ..)/lib/esp-idf
+export IDF_PATH :=  $(realpath ../..)/lib/esp-idf
 
 PROJECT_NAME := hatchtrack-peep-unit-test-fw
 
 EXTRA_COMPONENT_DIRS := \
-  $(realpath ..)/bme680 \
-  $(realpath ..)/icm20602 \
-  $(realpath ..)/hal \
-  $(realpath ..)/peep \
-  $(realpath ..)/protobuf
+  $(realpath ../..)/bme680 \
+  $(realpath ../..)/icm20602 \
+  $(realpath ../..)/hal \
+  $(realpath ../..)/peep \
+  $(realpath ../..)/protobuf
 
 include $(IDF_PATH)/make/project.mk
 

@@ -1,5 +1,5 @@
 export IDF_PATH := ./esp-idf
-PROJECT_NAME := hatchtrack-peep-fw
+export PROJECT_NAME := hatchtrack-peep-fw
 
 EXTRA_COMPONENT_DIRS := \
   ble \

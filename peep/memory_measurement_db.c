@@ -39,7 +39,6 @@ memory_measurement_db_add(struct hatch_measurement * p_meas)
     if (r) {
       _fp = fopen(_FILE, "a");
       if (NULL == _fp) {
-        LOGE("failed to open %s", _FILE);
         r = false;
       }
     }
@@ -78,7 +77,6 @@ memory_measurement_db_total(void)
     if (r) {
       _fp = fopen(_FILE, "r");
       if (NULL == _fp) {
-        LOGE("failed to open %s", _FILE);
         r = false;
       }
     }
@@ -130,7 +128,6 @@ memory_measurement_db_read_open(void)
     if (r) {
       _fp = fopen(_FILE, "r");
       if (NULL == _fp) {
-        LOGE("failed to open %s", _FILE);
         r = false;
       }
     }

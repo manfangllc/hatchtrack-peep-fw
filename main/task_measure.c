@@ -19,6 +19,8 @@
 //#define _NO_DEEP_SLEEP 1
 #define _BUFFER_LEN 2048
 
+#define _UNIX_TIMESTAMP_THRESHOLD (1546300800)
+
 #ifdef PEEP_TEST_STATE_MEASURE
   #define _TEST_WIFI_SSID "test-point"
   #define _TEST_WIFI_PASSWORD "1337-test!"
@@ -101,7 +103,7 @@ _publish_measurements(uint8_t * buf, uint32_t buf_len,
 
   if (r) {
     total = memory_measurement_db_total();
-    LOGI("%d old measurements to upload\n", total);
+    LOGI("%d old measurements to upload", total);
   }
 
   if (r && total) {
@@ -118,13 +120,12 @@ _publish_measurements(uint8_t * buf, uint32_t buf_len,
       if (r) {
         r = aws_mqtt_publish("hatchtrack/data/put", (char *) buf, false);
       }
-
     }
 
     memory_measurement_db_read_close();
 
     if (r) {
-      LOGI("deleting old data\n");
+      LOGI("deleting old data");
       memory_measurement_db_delete_all();
     }
   }
@@ -209,6 +210,7 @@ task_measure(void * arg)
 {
   struct hatch_configuration config;
   struct hatch_measurement meas;
+  char * peep_uuid = (char *) _uuid_start;
   char * root_ca = (char *) _root_ca_start;
   char * cert = (char *) _cert_start;
   char * key = (char *) _key_start;
@@ -247,7 +249,7 @@ task_measure(void * arg)
   }
 
   if (r && !is_local_measure) {
-    r = aws_mqtt_init(root_ca, cert, key, (char*) _uuid_start, 5);
+    r = aws_mqtt_init(root_ca, cert, key, peep_uuid, 5);
     is_local_measure = (r) ? false : true;
     r = true;
   }
@@ -258,8 +260,24 @@ task_measure(void * arg)
       &(meas.humidity),
       &(meas.air_pressure),
       &(meas.gas_resistance));
+  }
 
+  if (r) {
     meas.unix_timestamp = time(NULL);
+    if (meas.unix_timestamp < _UNIX_TIMESTAMP_THRESHOLD) {
+      LOGE("timestamp is invalid");
+      r = false;
+    }
+  }
+
+  if (r) {
+    if (meas.unix_timestamp >= config.end_unix_timestamp) {
+      enum peep_state state = PEEP_STATE_MEASURE_CONFIG;
+      memory_set_item(
+        MEMORY_ITEM_STATE,
+        (uint8_t *) &state,
+        sizeof(enum peep_state));
+    }
   }
 
   if (r && !is_local_measure) {
@@ -276,7 +294,7 @@ task_measure(void * arg)
     memory_measurement_db_add(&meas);
     total = memory_measurement_db_total();
 
-    LOGI("%d measurements stored\n", total);
+    LOGI("%d measurements stored", total);
   }
 
   hal_deep_sleep(config.measure_interval_sec);

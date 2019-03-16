@@ -71,6 +71,8 @@ task_measure_config(void * arg)
   if ((NULL == _buffer) || (NULL == _ssid) || (NULL == _pass)) {
     LOGE_TRAP("failed to allocate memory");
   }
+  ssid = _ssid;
+  pass = _pass;
 
   if (r) {
     len = memory_get_item(

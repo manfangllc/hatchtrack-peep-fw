@@ -98,8 +98,7 @@ _init_time(int32_t timeout_sec)
     sntp_init();
 
     // wait for time to be set
-    while(timeinfo.tm_year < (2016 - 1900) && ++retry < retry_max) {
-      LOGI("waiting for time to sync... (%d/%d)", retry, retry_max);
+    while ((timeinfo.tm_year < (2016 - 1900)) && (++retry < retry_max)) {
       vTaskDelay(poll_ticks);
       time(&now);
       localtime_r(&now, &timeinfo);
@@ -152,6 +151,7 @@ wifi_connect(char * ssid, char * password, int32_t timeout_sec)
     ESP_ERROR_CHECK( esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
     ESP_ERROR_CHECK( esp_wifi_start() );
 
+    LOGI("%d second connection timeout", timeout_sec);
     while ((0 == (bits & WIFI_CONNECTED_BIT)) && (timeout_sec > 0)) {
       /* Wait for WiFI to show as connected */
       bits = xEventGroupWaitBits(

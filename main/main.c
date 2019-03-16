@@ -29,13 +29,13 @@ app_main()
   RESULT_TEST_ERROR_TRACE(r);
 
 #ifdef PEEP_TEST_STATE_MEASURE
+  (void) len;
   state = PEEP_STATE_MEASURE;
 #else
   len = memory_get_item(
     MEMORY_ITEM_STATE,
     (uint8_t * ) &state,
     sizeof(enum peep_state));
-
 
   if (sizeof(enum peep_state) != len) {
     state = PEEP_STATE_BLE_CONFIG;

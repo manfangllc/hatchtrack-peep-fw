@@ -97,7 +97,6 @@ _publish_measurements(uint8_t * buf, uint32_t buf_len,
   if (r) {
     total = memory_measurement_db_total();
     LOGI("%d old measurements to upload\n", total);
-    printf("sizeof=%d\n", sizeof(struct hatch_measurement));
   }
 
   if (r && total) {
@@ -108,12 +107,11 @@ _publish_measurements(uint8_t * buf, uint32_t buf_len,
       r = memory_measurement_db_read_entry(&old);
 
       if (r) {
-        printf(
-          "%d %f %f %f\n",
-          old.unix_timestamp,
-          old.temperature,
-          old.humidity,
-          old.gas_resistance);
+        r = _format_json(buf, buf_len, &old, uuid);
+      }
+
+      if (r) {
+        r = aws_mqtt_publish("hatchtrack/data/put", (char *) buf, false);
       }
 
     }
@@ -226,10 +224,10 @@ task_measure(void * arg)
     meas.unix_timestamp = time(NULL);
   }
 
-  if (r) {
+  if (r && !is_local_measure) {
     r = _publish_measurements(_buffer, _BUFFER_LEN, &meas, (char *) _uuid_start);
   }
-  else if (is_local_measure) {
+  else if (r && is_local_measure) {
     uint32_t total = 0;
 
     memory_measurement_db_add(&meas);

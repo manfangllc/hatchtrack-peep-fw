@@ -39,13 +39,18 @@ memory_measurement_db_add(struct hatch_measurement * p_meas)
     if (r) {
       _fp = fopen(_FILE, "a");
       if (NULL == _fp) {
-        printf("failed to open %s\n", _FILE);
+        LOGE("failed to open %s", _FILE);
         r = false;
       }
     }
 
     if (r) {
       s = fwrite(src, sizeof(uint8_t), len, _fp);
+    }
+
+    if (s != len) {
+      LOGE("wrote %d of %d bytes", s, len);
+      r = false;
     }
 
     if (_fp) {
@@ -73,7 +78,7 @@ memory_measurement_db_total(void)
     if (r) {
       _fp = fopen(_FILE, "r");
       if (NULL == _fp) {
-        printf("failed to open %s\n", _FILE);
+        LOGE("failed to open %s", _FILE);
         r = false;
       }
     }
@@ -125,7 +130,7 @@ memory_measurement_db_read_open(void)
     if (r) {
       _fp = fopen(_FILE, "r");
       if (NULL == _fp) {
-        printf("failed to open %s\n", _FILE);
+        LOGE("failed to open %s", _FILE);
         r = false;
       }
     }

@@ -7,7 +7,7 @@
 
 /***** Local Data *****/
 
-static SemaphoreHandle_t _mutex;
+static SemaphoreHandle_t _mutex = NULL;
 
 static char * _file_lut[] = {
   /*
@@ -59,6 +59,9 @@ memory_init(void)
 
   if (r) {
     _mutex = xSemaphoreCreateMutex();
+    if (NULL == _mutex) {
+      r = false;
+    }
   }
 
   // TODO: Remove this...

@@ -12,7 +12,8 @@ EXTRA_COMPONENT_DIRS := \
 
 include $(IDF_PATH)/make/project.mk
 
-CFLAGS += -DPB_BUFFER_ONLY -DPB_FIELD_32BIT=1
+test-measure:
+	make -f Makefile.test-measure
 
 distclean: clean
 	rm -f sdkconfig.old

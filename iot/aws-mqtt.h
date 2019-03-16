@@ -15,7 +15,7 @@ typedef void
 
 extern bool
 aws_mqtt_init(char * root_ca, char * client_cert, char * client_key,
-  char * client_id);
+  char * client_id, int32_t timeout_sec);
 
 extern bool
 aws_mqtt_disconnect(void);

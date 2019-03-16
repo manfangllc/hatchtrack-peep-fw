@@ -5,6 +5,7 @@
 #include "tasks.h"
 #include "aws-mqtt.h"
 #include "hal.h"
+#include "hatch_config.h"
 #include "hatch_measurement.h"
 #include "memory.h"
 #include "memory_measurement_db.h"
@@ -16,12 +17,14 @@
 
 // Comment this out to enter deep sleep when not active.
 //#define _NO_DEEP_SLEEP 1
-#define _MEASURE_INTERVAL_SEC 60
 #define _BUFFER_LEN 2048
 
 #ifdef PEEP_TEST_STATE_MEASURE
-  #define TEST_WIFI_SSID "test-point"
-  #define TEST_WIFI_PASSWORD "1337-test!"
+  #define _TEST_WIFI_SSID "test-point"
+  #define _TEST_WIFI_PASSWORD "1337-test!"
+  #define _TEST_HATCH_CONFIG_UUID "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+  #define _TEST_HATCH_CONFIG_MEASURE_INTERVAL_SEC 60
+  #define _TEST_HATCH_CONFIG_END_UNIX_TIMESTAMP 1735084800
 #endif
 
 /***** Extern Data *****/
@@ -48,7 +51,7 @@ static char * _pass = NULL;
 
 static bool
 _format_json(uint8_t * buf, uint32_t buf_len,
-  struct hatch_measurement * meas, char * uuid)
+  struct hatch_measurement * meas, char * peep_uuid, char * hatch_uuid)
 {
   int32_t bytes = 0;
   bool r = true;
@@ -59,13 +62,15 @@ _format_json(uint8_t * buf, uint32_t buf_len,
     "{\n"
     "\"unixTime\": %d,\n"
     "\"peepUUID\": \"%s\",\n"
+    "\"hatchUUID\": \"%s\",\n"
     "\"temperature\": %f,\n"
     "\"humidity\": %f,\n"
     "\"pressure\": %f,\n"
     "\"gasResistance\": %f\n"
     "}",
     meas->unix_timestamp,
-    (const char *) uuid,
+    (const char *) peep_uuid,
+    (const char *) hatch_uuid,
     meas->temperature,
     meas->humidity,
     meas->air_pressure,
@@ -80,14 +85,14 @@ _format_json(uint8_t * buf, uint32_t buf_len,
 
 static bool
 _publish_measurements(uint8_t * buf, uint32_t buf_len,
-  struct hatch_measurement * meas, char * uuid)
+  struct hatch_measurement * meas, char * peep_uuid, char * hatch_uuid)
 {
   struct hatch_measurement old;
   uint32_t total = 0;
   bool r = true;
 
   if (r) {
-    _format_json(buf, buf_len, meas, uuid);
+    _format_json(buf, buf_len, meas, peep_uuid, hatch_uuid);
   }
 
   if (r) {
@@ -107,7 +112,7 @@ _publish_measurements(uint8_t * buf, uint32_t buf_len,
       r = memory_measurement_db_read_entry(&old);
 
       if (r) {
-        r = _format_json(buf, buf_len, &old, uuid);
+        r = _format_json(buf, buf_len, &old, peep_uuid, hatch_uuid);
       }
 
       if (r) {
@@ -136,8 +141,8 @@ _get_wifi_ssid_pasword(char * ssid, char * password)
 
 #ifdef PEEP_TEST_STATE_MEASURE
   (void) len;
-  strcpy(ssid, TEST_WIFI_SSID);
-  strcpy(password, TEST_WIFI_PASSWORD);
+  strcpy(ssid, _TEST_WIFI_SSID);
+  strcpy(password, _TEST_WIFI_PASSWORD);
 #else
   if (r) {
     len = memory_get_item(
@@ -169,11 +174,40 @@ _get_wifi_ssid_pasword(char * ssid, char * password)
   return r;
 }
 
+static bool
+_get_hatch_config(struct hatch_configuration * config)
+{
+  int len = 0;
+  bool r = true;
+#ifdef PEEP_TEST_STATE_MEASURE
+  (void) len;
+  strcpy(config->uuid, _TEST_HATCH_CONFIG_UUID);
+  config->end_unix_timestamp = _TEST_HATCH_CONFIG_END_UNIX_TIMESTAMP;
+  config->measure_interval_sec = _TEST_HATCH_CONFIG_MEASURE_INTERVAL_SEC;
+#else
+  if (r) {
+    len = memory_get_item(
+      MEMORY_ITEM_HATCH_CONFIG,
+      (uint8_t *) config,
+      sizeof(struct hatch_configuration));
+    if (len <= 0) {
+      r = false;
+    }
+    else {
+      LOGI("hatch UUID = %s", config->hatch_uuid);
+    }
+  }
+#endif
+
+  return r;
+}
+
 /***** Global Functions *****/
 
 void
 task_measure(void * arg)
 {
+  struct hatch_configuration config;
   struct hatch_measurement meas;
   char * root_ca = (char *) _root_ca_start;
   char * cert = (char *) _cert_start;
@@ -196,6 +230,10 @@ task_measure(void * arg)
 
   if (r) {
     r = _get_wifi_ssid_pasword(ssid, pass);
+  }
+
+  if (r) {
+    r = _get_hatch_config(&config);
   }
 
   if (r) {
@@ -225,7 +263,12 @@ task_measure(void * arg)
   }
 
   if (r && !is_local_measure) {
-    r = _publish_measurements(_buffer, _BUFFER_LEN, &meas, (char *) _uuid_start);
+    r = _publish_measurements(
+      _buffer,
+      _BUFFER_LEN,
+      &meas,
+      (char *) _uuid_start,
+      config.uuid);
   }
   else if (r && is_local_measure) {
     uint32_t total = 0;
@@ -236,5 +279,5 @@ task_measure(void * arg)
     LOGI("%d measurements stored\n", total);
   }
 
-  hal_deep_sleep(_MEASURE_INTERVAL_SEC);
+  hal_deep_sleep(config.measure_interval_sec);
 }

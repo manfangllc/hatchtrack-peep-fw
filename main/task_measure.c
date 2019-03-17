@@ -3,7 +3,7 @@
 #include <time.h>
 
 #include "tasks.h"
-#include "aws-mqtt.h"
+#include "aws_mqtt.h"
 #include "hal.h"
 #include "hatch_config.h"
 #include "hatch_measurement.h"
@@ -195,7 +195,7 @@ _get_hatch_config(struct hatch_configuration * config)
       r = false;
     }
     else {
-      LOGI("hatch UUID = %s", config->hatch_uuid);
+      LOGI("hatch UUID = %s", config->uuid);
     }
   }
 #endif

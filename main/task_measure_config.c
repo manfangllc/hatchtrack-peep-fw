@@ -1,7 +1,7 @@
 /***** Includes *****/
 
 #include "tasks.h"
-#include "aws-mqtt.h"
+#include "aws_mqtt_shadow.h"
 #include "hal.h"
 #include "memory.h"
 #include "state.h"
@@ -11,6 +11,11 @@
 /***** Defines *****/
 
 #define _BUFFER_LEN (2048)
+
+#ifdef PEEP_TEST_STATE_MEASURE_CONFIG
+  #define _TEST_WIFI_SSID "test-point"
+  #define _TEST_WIFI_PASSWORD "1337-test!"
+#endif
 
 /***** Extern Data *****/
 
@@ -37,13 +42,45 @@ static const int SYNC_BIT = BIT0;
 
 /***** Local Functions *****/
 
-static void
-_measure_config_cb(uint8_t * buf, uint16_t len)
+static bool
+_get_wifi_ssid_pasword(char * ssid, char * password)
 {
-  memcpy(_buffer, buf, len);
-  _buffer[len] = 0;
+  int len = 0;
+  bool r = true;
 
-  printf("%s\n", _buffer);
+#ifdef PEEP_TEST_STATE_MEASURE_CONFIG
+  (void) len;
+  strcpy(ssid, _TEST_WIFI_SSID);
+  strcpy(password, _TEST_WIFI_PASSWORD);
+#else
+  if (r) {
+    len = memory_get_item(
+      MEMORY_ITEM_WIFI_SSID,
+      (uint8_t *) ssid,
+      WIFI_SSID_LEN_MAX);
+    if (len <= 0) {
+      r = false;
+    }
+    else {
+      LOGI("SSID = %s", ssid);
+    }
+  }
+
+  if (r) {
+    len = memory_get_item(
+      MEMORY_ITEM_WIFI_PASS,
+      (uint8_t *) password,
+      WIFI_PASSWORD_LEN_MAX);
+    if (len <= 0) {
+      r = false;
+    }
+    else {
+      LOGI("PASS = %s", password);
+    }
+  }
+#endif
+
+  return r;
 }
 
 /***** Global Functions *****/
@@ -51,16 +88,13 @@ _measure_config_cb(uint8_t * buf, uint16_t len)
 void
 task_measure_config(void * arg)
 {
-  EventBits_t bits = 0;
-  char * mqtt_topic = "hatchtrack/data/put";
+  char * peep_uuid = (char *) _uuid_start;
   char * root_ca = (char *) _root_ca_start;
   char * cert = (char *) _cert_start;
   char * key = (char *) _key_start;
   char * ssid = NULL;
   char * pass = NULL;
-  bool is_configured = false;
   bool r = true;
-  int len = 0;
 
   LOGI("start");
 
@@ -75,29 +109,7 @@ task_measure_config(void * arg)
   pass = _pass;
 
   if (r) {
-    len = memory_get_item(
-      MEMORY_ITEM_WIFI_SSID,
-      (uint8_t *) ssid,
-      WIFI_SSID_LEN_MAX);
-    if (len <= 0) {
-      r = false;
-    }
-    else {
-      LOGI("SSID = %s\n", ssid);
-    }
-  }
-
-  if (r) {
-    len = memory_get_item(
-      MEMORY_ITEM_WIFI_PASS,
-      (uint8_t *) pass,
-      WIFI_PASSWORD_LEN_MAX);
-    if (len <= 0) {
-      r = false;
-    }
-    else {
-      LOGI("PASS = %s\n", pass);
-    }
+    r = _get_wifi_ssid_pasword(ssid, pass);
   }
 
   if (r) {
@@ -109,29 +121,15 @@ task_measure_config(void * arg)
   }
 
   if (r) {
-    r = aws_mqtt_init(root_ca, cert, key, (char*) _uuid_start, 5);
+    r = aws_mqtt_shadow_init(root_ca, cert, key, peep_uuid, 5);
   }
 
   if (r) {
-    r = aws_mqtt_subsribe(mqtt_topic, _measure_config_cb);
+    r = aws_mqtt_shadow_get(_buffer, _BUFFER_LEN);
   }
 
-  while ((r) && (!is_configured)) {
-    bits = 0;
-    while (0 == (bits & SYNC_BIT)) {
-      aws_mqtt_subsribe_poll(1000);
-
-      // Wait for BLE config to complete.
-      bits = xEventGroupWaitBits(
-        _sync_event_group,
-        SYNC_BIT,
-        false,
-        true,
-        1000 / portTICK_PERIOD_MS);
-    }
-
-    aws_mqtt_unsubscribe(mqtt_topic);
-
+  while (1) {
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 
   hal_deep_sleep(0);

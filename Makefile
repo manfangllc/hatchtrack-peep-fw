@@ -15,6 +15,9 @@ include $(IDF_PATH)/make/project.mk
 test-measure:
 	make -f Makefile.test-measure
 
+test-measure-config:
+	make -f Makefile.test-measure-config
+
 distclean: clean
 	rm -f sdkconfig.old
 	rm -f sdkconfig

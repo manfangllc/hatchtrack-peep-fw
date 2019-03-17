@@ -83,6 +83,12 @@ _get_wifi_ssid_pasword(char * ssid, char * password)
   return r;
 }
 
+static void
+_shadow_callback(uint8_t * buf, uint8_t * buf_len)
+{
+  
+}
+
 /***** Global Functions *****/
 
 void
@@ -125,11 +131,12 @@ task_measure_config(void * arg)
   }
 
   if (r) {
-    r = aws_mqtt_shadow_get(_buffer, _BUFFER_LEN);
+    r = aws_mqtt_shadow_get(_shadow_callback);
   }
 
   while (1) {
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    aws_mqtt_shadow_poll(1000);
+    //vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 
   hal_deep_sleep(0);

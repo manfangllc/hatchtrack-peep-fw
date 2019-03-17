@@ -112,18 +112,30 @@ aws_mqtt_shadow_disconnect(void)
 }
 
 bool
-aws_mqtt_shadow_get(uint8_t buf, uint32_t buf_len)
+aws_mqtt_shadow_get(aws_mqtt_shadow_cb cb)
 {
   IoT_Error_t err = SUCCESS;
-  bool r = true;
 
   err = aws_iot_shadow_get(
     &_client,
     _thing_name,
     _shadow_get_cb,
-    NULL,
-    60,
+    cb,
+    180,
     false);
+  if (SUCCESS != err) {
+    LOGE("aws_iot_shadow_get error (%d)", err);
+  }
 
-  return r;
+  return (SUCCESS == err) ? true : false;
+}
+
+bool
+aws_mqtt_shadow_poll(uint32_t poll_ms)
+{
+  IoT_Error_t err = SUCCESS;
+
+  err = aws_iot_shadow_yield(&_client, poll_ms);
+
+  return (SUCCESS == err) ? true : false;
 }

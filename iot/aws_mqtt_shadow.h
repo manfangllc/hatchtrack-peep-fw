@@ -6,6 +6,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+/***** Typedefs *****/
+
+typedef void
+(*aws_mqtt_shadow_cb)(uint8_t * buf, uint16_t len);
+
 /***** Global Functions *****/
 
 extern bool
@@ -16,6 +21,9 @@ extern bool
 aws_mqtt_shadow_disconnect(void);
 
 extern bool
-aws_mqtt_shadow_get(uint8_t buf, uint32_t buf_len);
+aws_mqtt_shadow_get(aws_mqtt_shadow_cb cb);
+
+extern bool
+aws_mqtt_shadow_poll(uint32_t poll_ms);
 
 #endif

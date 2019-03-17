@@ -166,7 +166,7 @@ aws_mqtt_subsribe(char * topic, aws_subscribe_cb cb)
 }
 
 bool
-aws_mqtt_subsribe_poll(uint32_t poll_ms)
+aws_mqtt_subscribe_poll(uint32_t poll_ms)
 {
   IoT_Error_t rc = FAILURE;
 

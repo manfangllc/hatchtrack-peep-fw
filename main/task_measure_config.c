@@ -14,8 +14,8 @@
 #define _BUFFER_LEN (2048)
 
 #ifdef PEEP_TEST_STATE_MEASURE_CONFIG
-  #define _TEST_WIFI_SSID "test-point"
-  #define _TEST_WIFI_PASSWORD "1337-test!"
+  #define _TEST_WIFI_SSID "thesignal"
+  #define _TEST_WIFI_PASSWORD "palmerho"
 #endif
 
 /***** Extern Data *****/

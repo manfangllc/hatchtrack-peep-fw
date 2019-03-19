@@ -22,10 +22,10 @@
 #define _UNIX_TIMESTAMP_THRESHOLD (1546300800)
 
 #ifdef PEEP_TEST_STATE_MEASURE
-  #define _TEST_WIFI_SSID "test-point"
-  #define _TEST_WIFI_PASSWORD "1337-test!"
+  #define _TEST_WIFI_SSID "thesignal"
+  #define _TEST_WIFI_PASSWORD "palmerho"
   #define _TEST_HATCH_CONFIG_UUID "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-  #define _TEST_HATCH_CONFIG_MEASURE_INTERVAL_SEC 60
+  #define _TEST_HATCH_CONFIG_MEASURE_INTERVAL_SEC 900
   #define _TEST_HATCH_CONFIG_END_UNIX_TIMESTAMP 1735084800
 #endif
 

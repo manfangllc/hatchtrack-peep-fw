@@ -142,7 +142,7 @@ aws_mqtt_publish(char * topic, char * message, bool retain)
 }
 
 bool
-aws_mqtt_subsribe(char * topic, aws_subscribe_cb cb)
+aws_mqtt_subscribe(char * topic, aws_subscribe_cb cb)
 {
   IoT_Error_t rc = FAILURE;
 

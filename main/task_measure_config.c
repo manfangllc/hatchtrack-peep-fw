@@ -1,6 +1,7 @@
 /***** Includes *****/
 
 #include "tasks.h"
+#include "aws_mqtt.h"
 #include "aws_mqtt_shadow.h"
 #include "hal.h"
 #include "memory.h"
@@ -84,9 +85,9 @@ _get_wifi_ssid_pasword(char * ssid, char * password)
 }
 
 static void
-_shadow_callback(uint8_t * buf, uint8_t * buf_len)
+_shadow_callback(uint8_t * buf, uint16_t buf_len)
 {
-  
+  printf("%.*s", buf_len, (char *) buf);
 }
 
 /***** Global Functions *****/
@@ -136,7 +137,7 @@ task_measure_config(void * arg)
 
   while (1) {
     aws_mqtt_shadow_poll(1000);
-    //vTaskDelay(1000 / portTICK_PERIOD_MS);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 
   hal_deep_sleep(0);

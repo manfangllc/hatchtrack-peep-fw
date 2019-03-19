@@ -28,9 +28,12 @@ app_main()
   r = memory_measurement_db_init();
   RESULT_TEST_ERROR_TRACE(r);
 
-#ifdef PEEP_TEST_STATE_MEASURE
+#if defined(PEEP_TEST_STATE_MEASURE)
   (void) len;
   state = PEEP_STATE_MEASURE;
+#elif defined(PEE_TEST_STATE_MEASURE_CONFIG)
+  (void) len;
+  state = PEEP_STATE_MEASURE_CONFIG;
 #else
   len = memory_get_item(
     MEMORY_ITEM_STATE,

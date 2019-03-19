@@ -21,7 +21,6 @@
 #define _PWM_RESOLUTION (LEDC_TIMER_16_BIT)
 #define _PWM_FREQ_HZ 1000
 
-
 /***** Local Data *****/
 
 static struct bme680_dev _bme680;

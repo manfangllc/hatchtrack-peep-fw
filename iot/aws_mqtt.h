@@ -25,10 +25,10 @@ extern bool
 aws_mqtt_publish(char * topic, char * message, bool retain);
 
 extern bool
-aws_mqtt_subsribe(char * topic, aws_subscribe_cb cb);
+aws_mqtt_subscribe(char * topic, aws_subscribe_cb cb);
 
 extern bool
-aws_mqtt_subsribe_poll(uint32_t poll_ms);
+aws_mqtt_subscribe_poll(uint32_t poll_ms);
 
 extern bool
 aws_mqtt_unsubscribe(char * topic);

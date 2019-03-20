@@ -12,11 +12,13 @@
 
 /***** Defines *****/
 
+#define _SHADOW_JSON_MAX_LEN 256
 
 /***** Local Data *****/
 
 static AWS_IoT_Client _client;
-static char * _thing_name;
+static const char * _thing_name;
+static char * _js = NULL;
 
 /***** Local Functions *****/
 
@@ -26,6 +28,7 @@ _shadow_get_cb(const char *pThingName, ShadowActions_t action,
   void *pContextData)
 {
   aws_mqtt_shadow_cb cb = (aws_mqtt_shadow_cb) pContextData;
+  char * js = NULL;
 
   if (SHADOW_GET != action) {
     LOGE("expected SHADOW_GET, but got %d", action);
@@ -38,7 +41,29 @@ _shadow_get_cb(const char *pThingName, ShadowActions_t action,
   }
 
   (void) pThingName;
-  cb((uint8_t *) pReceivedJsonDocument, strlen(pReceivedJsonDocument) + 1);
+  js = strstr(pReceivedJsonDocument, "\"desired\":");
+  if (js) {
+    char * src = (char *) pReceivedJsonDocument;
+    uint32_t len = 0;
+    uint32_t m = 0;
+    uint32_t n = 0;
+
+    js += strlen("\"desired\":");
+    m = strlen(src);
+    n = js - src;
+
+    while (('}' != src[n]) && (n < m)) {
+      len++;
+      n++;
+    }
+
+    if (('}' == src[n]) && (n < m)) {
+      memcpy(_js, js, len + 1);
+      _js[len + 1] = 0;
+
+      cb((uint8_t *) _js, strlen(_js) + 1);
+    }
+  }
 }
 
 /***** Global Functions *****/
@@ -97,6 +122,10 @@ aws_mqtt_shadow_init(char * root_ca, char * client_cert, char * client_key,
         LOGE("aws_iot_shadow_set_autoreconnect_status error (%d)", err);
         r = false;
     }
+  }
+
+  if (r) {
+    _js = malloc(_SHADOW_JSON_MAX_LEN);
   }
 
   return r;

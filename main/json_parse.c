@@ -48,7 +48,7 @@ json_parse_wifi_credentials_msg(char * js, char * ssid, uint32_t ssid_max_len,
 
     value[string_length] = '\0';
     key[key_length] = '\0';
-    LOGI("decoded: %s = %s\n", key, value);
+    LOGD("decoded: %s = %s", key, value);
 
     if (0 == strcasecmp(key, "wifiSSID")) {
       strncpy(ssid, value, ssid_max_len);
@@ -104,7 +104,7 @@ json_parse_hatch_config_msg(char * js, struct hatch_configuration * config)
 
     value[string_length] = '\0';
     key[key_length] = '\0';
-    LOGI("decoded: %s = %s\n", key, value);
+    LOGD("decoded: %s = %s", key, value);
 
     if (0 == strcmp(key, "hatchUUID")) {
       strncpy(config->uuid, value, UUID_BUF_LEN);

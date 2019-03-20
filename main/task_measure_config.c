@@ -4,6 +4,7 @@
 #include "aws_mqtt.h"
 #include "aws_mqtt_shadow.h"
 #include "hal.h"
+#include "json_parse.h"
 #include "memory.h"
 #include "state.h"
 #include "system.h"
@@ -34,6 +35,7 @@ extern const uint8_t _uuid_end[]   asm("_binary_uuid_txt_end");
 
 /***** Local Data *****/
 
+static struct hatch_configuration _config;
 static uint8_t * _buffer = NULL;
 static char * _ssid = NULL;
 static char * _pass = NULL;
@@ -87,8 +89,20 @@ _get_wifi_ssid_pasword(char * ssid, char * password)
 static void
 _shadow_callback(uint8_t * buf, uint16_t buf_len)
 {
-  LOGI("received %d bytes\n", buf_len);
-  ESP_LOG_BUFFER_HEXDUMP(__func__, buf, buf_len, ESP_LOG_INFO);
+  bool r = true;
+
+  r = json_parse_hatch_config_msg((char *) buf, &_config);
+  if (r) {
+    LOGI("uuid=%s", _config.uuid);
+    LOGI("end_unix_timestamp=%d", _config.end_unix_timestamp);
+    LOGI("measure_interval_sec=%d", _config.measure_interval_sec);
+    xEventGroupSetBits(_sync_event_group, SYNC_BIT);
+  }
+  else {
+    LOGE("error decoding shadow JSON document");
+    LOGE("received %d bytes", buf_len);
+    ESP_LOG_BUFFER_HEXDUMP(__func__, buf, buf_len, ESP_LOG_ERROR);
+  }
 }
 
 /***** Global Functions *****/
@@ -96,6 +110,7 @@ _shadow_callback(uint8_t * buf, uint16_t buf_len)
 void
 task_measure_config(void * arg)
 {
+  EventBits_t bits = 0;
   char * peep_uuid = (char *) _uuid_start;
   char * root_ca = (char *) _root_ca_start;
   char * cert = (char *) _cert_start;
@@ -115,6 +130,8 @@ task_measure_config(void * arg)
   }
   ssid = _ssid;
   pass = _pass;
+
+  memset(&_config, 0, sizeof(struct hatch_configuration));
 
   if (r) {
     r = _get_wifi_ssid_pasword(ssid, pass);
@@ -136,9 +153,16 @@ task_measure_config(void * arg)
     r = aws_mqtt_shadow_get(_shadow_callback);
   }
 
-  while (1) {
+  while ((r) && (0 == (bits & SYNC_BIT))) {
     aws_mqtt_shadow_poll(1000);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+
+    bits = xEventGroupWaitBits(
+      _sync_event_group,
+      SYNC_BIT,
+      false,
+      true,
+      0);
   }
 
   hal_deep_sleep(0);

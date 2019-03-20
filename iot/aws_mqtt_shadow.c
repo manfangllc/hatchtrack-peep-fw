@@ -25,6 +25,8 @@ _shadow_get_cb(const char *pThingName, ShadowActions_t action,
   Shadow_Ack_Status_t status, const char *pReceivedJsonDocument,
   void *pContextData)
 {
+  aws_mqtt_shadow_cb cb = (aws_mqtt_shadow_cb) pContextData;
+
   if (SHADOW_GET != action) {
     LOGE("expected SHADOW_GET, but got %d", action);
     return;
@@ -36,8 +38,7 @@ _shadow_get_cb(const char *pThingName, ShadowActions_t action,
   }
 
   (void) pThingName;
-
-  printf("%s\n", pReceivedJsonDocument);
+  cb((uint8_t *) pReceivedJsonDocument, strlen(pReceivedJsonDocument) + 1);
 }
 
 /***** Global Functions *****/

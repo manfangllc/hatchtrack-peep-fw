@@ -87,7 +87,8 @@ _get_wifi_ssid_pasword(char * ssid, char * password)
 static void
 _shadow_callback(uint8_t * buf, uint16_t buf_len)
 {
-  printf("%.*s", buf_len, (char *) buf);
+  LOGI("received %d bytes\n", buf_len);
+  ESP_LOG_BUFFER_HEXDUMP(__func__, buf, buf_len, ESP_LOG_INFO);
 }
 
 /***** Global Functions *****/

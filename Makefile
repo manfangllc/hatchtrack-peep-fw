@@ -18,6 +18,9 @@ test-measure:
 test-measure-config:
 	make -f Makefile.test-measure-config
 
+test-ble-config:
+	make -f Makefile.test-ble-config
+
 distclean: clean
 	rm -f sdkconfig.old
 	rm -f sdkconfig

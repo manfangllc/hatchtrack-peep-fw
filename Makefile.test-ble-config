@@ -1,0 +1,16 @@
+export IDF_PATH := ./esp-idf
+PROJECT_NAME := hatchtrack-peep-fw
+
+EXTRA_COMPONENT_DIRS := \
+  ble \
+  bme680 \
+  hal \
+  iot \
+  icm20602 \
+  peep \
+  wifi
+
+include $(IDF_PATH)/make/project.mk
+
+CFLAGS += -DPEEP_TEST_STATE_BLE_CONFIG
+

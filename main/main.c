@@ -31,9 +31,12 @@ app_main()
 #if defined(PEEP_TEST_STATE_MEASURE)
   (void) len;
   state = PEEP_STATE_MEASURE;
-#elif defined(PEE_TEST_STATE_MEASURE_CONFIG)
+#elif defined(PEEP_TEST_STATE_MEASURE_CONFIG)
   (void) len;
   state = PEEP_STATE_MEASURE_CONFIG;
+#elif defined (PEEP_TEST_STATE_BLE_CONFIG)
+  (void) len;
+  state = PEEP_STATE_BLE_CONFIG;
 #else
   len = memory_get_item(
     MEMORY_ITEM_STATE,

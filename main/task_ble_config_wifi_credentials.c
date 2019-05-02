@@ -82,8 +82,11 @@ task_ble_config_wifi_credentials(void * arg)
       portMAX_DELAY);
     
     if (bits & SYNC_BIT) {
+      xEventGroupClearBits(_sync_event_group, SYNC_BIT);
       LOGI("ssid = %s\n", _ssid);
       LOGI("password = %s\n", _pass);
+      _ssid[0] = 0;
+      _pass[0] = 0;
     }
   }
 #else

@@ -6,6 +6,7 @@
 
 #include "nvs_flash.h"
 
+#include "hal.h"
 #include "memory.h"
 #include "memory_measurement_db.h"
 #include "state.h"
@@ -28,7 +29,10 @@ app_main()
   r = memory_measurement_db_init();
   RESULT_TEST_ERROR_TRACE(r);
 
-#if defined(PEEP_TEST_STATE_MEASURE)
+#if defined (PEEP_TEST_STATE_DEEP_SLEEP)
+  hal_deep_sleep(600);
+  // will not return from above
+#elif defined(PEEP_TEST_STATE_MEASURE)
   (void) len;
   state = PEEP_STATE_MEASURE;
 #elif defined(PEEP_TEST_STATE_MEASURE_CONFIG)

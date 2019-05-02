@@ -12,6 +12,9 @@ EXTRA_COMPONENT_DIRS := \
 
 include $(IDF_PATH)/make/project.mk
 
+test-deep-sleep:
+	make -f Makefile.test-deep-sleep
+
 test-measure:
 	make -f Makefile.test-measure
 

@@ -57,6 +57,7 @@ app_main()
 #endif
 
   if (PEEP_STATE_BLE_CONFIG == state) {
+    LOGD("PEEP_STATE_BLE_CONFIG");
     xTaskCreate(
       task_ble_config_wifi_credentials,
       "ble config task",
@@ -66,6 +67,7 @@ app_main()
       NULL);
   }
   else if (PEEP_STATE_MEASURE == state) {
+    LOGD("PEEP_STATE_MEASURE");
     xTaskCreate(
       task_measure,
       "measurement task",
@@ -75,6 +77,7 @@ app_main()
       NULL);
   }
   else if (PEEP_STATE_MEASURE_CONFIG == state) {
+    LOGD("PEEP_STATE_MEASURE_CONFIG");
     xTaskCreate(
       task_measure_config,
       "measurement config task",

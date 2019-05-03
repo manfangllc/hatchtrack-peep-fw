@@ -340,6 +340,8 @@ hal_deep_sleep(uint32_t sec)
   esp_err_t r = ESP_OK;
   uint64_t wakeup_time_usec = sec * 1000000;
 
+  bme680_soft_reset(&_bme680);
+
   LOGI("Entering %d second deep sleep\n", sec);
 
   r = esp_sleep_enable_timer_wakeup(wakeup_time_usec);

@@ -165,5 +165,6 @@ task_measure_config(void * arg)
       0);
   }
 
+  wifi_disconnect();
   hal_deep_sleep(0);
 }

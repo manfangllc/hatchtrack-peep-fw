@@ -20,12 +20,15 @@
 /***** Local Data *****/
 
 // event group to signal when we are connected & ready to make a request
-static EventGroupHandle_t wifi_event_group = NULL;
+static EventGroupHandle_t _wifi_event_group = NULL;
 
 /* The event group allows multiple bits for each event,
    but we only care about one event - are we connected
    to the AP with an IP? */
 const int WIFI_CONNECTED_BIT = BIT0;
+const int WIFI_DISCONNECT_BIT = BIT1;
+
+static volatile bool _is_active = false;
 
 /***** Local Functions *****/
 
@@ -37,7 +40,9 @@ _event_handler(void *ctx, system_event_t *event)
     ESP_LOGI(
       __func__,
       "start");
-    esp_wifi_connect();
+    if (_is_active) {
+      esp_wifi_connect();
+    }
     break;
 
   case SYSTEM_EVENT_STA_GOT_IP:
@@ -45,7 +50,8 @@ _event_handler(void *ctx, system_event_t *event)
       __func__,
       "got ip:%s",
       ip4addr_ntoa(&event->event_info.got_ip.ip_info.ip));
-    xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
+    xEventGroupSetBits(_wifi_event_group, WIFI_CONNECTED_BIT);
+    xEventGroupClearBits(_wifi_event_group, WIFI_DISCONNECT_BIT);
     break;
 
   case SYSTEM_EVENT_AP_STACONNECTED:
@@ -68,13 +74,17 @@ _event_handler(void *ctx, system_event_t *event)
     ESP_LOGI(
       __func__,
       "disconnected");
-    esp_wifi_connect();
-    xEventGroupClearBits(wifi_event_group, WIFI_CONNECTED_BIT);
+    if (_is_active) {
+      esp_wifi_connect();
+    }
+    xEventGroupSetBits(_wifi_event_group, WIFI_DISCONNECT_BIT);
+    xEventGroupClearBits(_wifi_event_group, WIFI_CONNECTED_BIT);
     break;
 
   default:
       break;
   }
+
   return ESP_OK;
 }
 
@@ -142,8 +152,9 @@ wifi_connect(char * ssid, char * password, int32_t timeout_sec)
   strncpy((char *) wifi_config.sta.password, password, WIFI_PASSWORD_LEN_MAX-1);
 
   if (r) {
+    _is_active = true;
     tcpip_adapter_init();
-    wifi_event_group = xEventGroupCreate();
+    _wifi_event_group = xEventGroupCreate();
     ESP_ERROR_CHECK( esp_event_loop_init(_event_handler, NULL) );
     ESP_ERROR_CHECK( esp_wifi_init(&cfg) );
     ESP_ERROR_CHECK( esp_wifi_set_storage(WIFI_STORAGE_RAM) );
@@ -155,7 +166,7 @@ wifi_connect(char * ssid, char * password, int32_t timeout_sec)
     while ((0 == (bits & WIFI_CONNECTED_BIT)) && (timeout_sec > 0)) {
       /* Wait for WiFI to show as connected */
       bits = xEventGroupWaitBits(
-        wifi_event_group,
+        _wifi_event_group,
         WIFI_CONNECTED_BIT,
         false,
         true,
@@ -186,13 +197,31 @@ bool
 wifi_disconnect(void)
 {
   esp_err_t r = ESP_OK;
+  EventBits_t bits = 0;
+
+  _is_active = false;
 
   r = esp_wifi_stop();
   if (ESP_OK != r) {
-    ESP_LOGE(__func__, "Failed to stop WiFi");
+    LOGE("Failed to stop WiFi");
   }
 
-  vEventGroupDelete(wifi_event_group);
+  bits = xEventGroupWaitBits(
+    _wifi_event_group,
+    WIFI_DISCONNECT_BIT,
+    false,
+    true,
+    5000 / portTICK_PERIOD_MS);
+  if (0 == (bits & WIFI_DISCONNECT_BIT)) {
+    LOGE("Failed to disconnect from WiFi");
+  }
+
+  r = esp_wifi_deinit();
+  if (ESP_OK != r) {
+    LOGE("Failed to deinit WiFi");
+  }
+
+  vEventGroupDelete(_wifi_event_group);
 
   return (ESP_OK == r) ? true : false;
 }

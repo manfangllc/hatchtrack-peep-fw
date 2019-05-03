@@ -242,24 +242,27 @@ task_measure(void * arg)
     r = hal_init();
   }
 
+  if (r) {
+    LOGD("performing measurement");
+    r = hal_read_temperature_humdity_pressure_resistance(
+      &(meas.temperature),
+      &(meas.humidity),
+      &(meas.air_pressure),
+      &(meas.gas_resistance));
+  }
+
   if (r && !is_local_measure) {
+    LOGD("connecting to WiFi SSID %s", ssid);
     r = wifi_connect(ssid, pass, 15);
     is_local_measure = (r) ? false : true;
     r = true;
   }
 
   if (r && !is_local_measure) {
+    LOGD("connecting to AWS");
     r = aws_mqtt_init(root_ca, cert, key, peep_uuid, 5);
     is_local_measure = (r) ? false : true;
     r = true;
-  }
-
-  if (r) {
-    r = hal_read_temperature_humdity_pressure_resistance(
-      &(meas.temperature),
-      &(meas.humidity),
-      &(meas.air_pressure),
-      &(meas.gas_resistance));
   }
 
   if (r) {
@@ -272,6 +275,7 @@ task_measure(void * arg)
 
   if (r) {
     if (meas.unix_timestamp >= config.end_unix_timestamp) {
+      LOGD("end of measurement time reached");
       enum peep_state state = PEEP_STATE_MEASURE_CONFIG;
       memory_set_item(
         MEMORY_ITEM_STATE,
@@ -281,6 +285,7 @@ task_measure(void * arg)
   }
 
   if (r && !is_local_measure) {
+    LOGD("publishing measurement results");
     r = _publish_measurements(
       _buffer,
       _BUFFER_LEN,
@@ -291,11 +296,14 @@ task_measure(void * arg)
   else if (r && is_local_measure) {
     uint32_t total = 0;
 
+    LOGD("storing measurement results");
+
     memory_measurement_db_add(&meas);
     total = memory_measurement_db_total();
 
     LOGI("%d measurements stored", total);
   }
 
+  wifi_disconnect();
   hal_deep_sleep(config.measure_interval_sec);
 }

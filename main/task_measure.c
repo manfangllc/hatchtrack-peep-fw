@@ -22,10 +22,15 @@
 #define _UNIX_TIMESTAMP_THRESHOLD (1546300800)
 
 #ifdef PEEP_TEST_STATE_MEASURE
+  // SSID of the WiFi AP connect to.
   #define _TEST_WIFI_SSID "thesignal"
+  // Password of the WiFi AP to connect to.
   #define _TEST_WIFI_PASSWORD "palmerho"
+  // Leave this value alone unless you have a good reason to change it.
   #define _TEST_HATCH_CONFIG_UUID "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+  // Seconds that Peep should deep sleep before taking a new measurement.
   #define _TEST_HATCH_CONFIG_MEASURE_INTERVAL_SEC 900
+  // UTC Unix timestamp at which Peep should stop taking measurements.
   #define _TEST_HATCH_CONFIG_END_UNIX_TIMESTAMP 1735084800
 #endif
 

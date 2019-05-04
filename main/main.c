@@ -6,7 +6,9 @@
 
 #include "nvs_flash.h"
 
+#include "hal.h"
 #include "memory.h"
+#include "memory_measurement_db.h"
 #include "state.h"
 #include "system.h"
 #include "tasks.h"
@@ -24,6 +26,22 @@ app_main()
   r = memory_init();
   RESULT_TEST_ERROR_TRACE(r);
 
+  r = memory_measurement_db_init();
+  RESULT_TEST_ERROR_TRACE(r);
+
+#if defined (PEEP_TEST_STATE_DEEP_SLEEP)
+  hal_deep_sleep(600);
+  // will not return from above
+#elif defined(PEEP_TEST_STATE_MEASURE)
+  (void) len;
+  state = PEEP_STATE_MEASURE;
+#elif defined(PEEP_TEST_STATE_MEASURE_CONFIG)
+  (void) len;
+  state = PEEP_STATE_MEASURE_CONFIG;
+#elif defined (PEEP_TEST_STATE_BLE_CONFIG)
+  (void) len;
+  state = PEEP_STATE_BLE_CONFIG;
+#else
   len = memory_get_item(
     MEMORY_ITEM_STATE,
     (uint8_t * ) &state,
@@ -36,8 +54,10 @@ app_main()
       (uint8_t *) &state,
       sizeof(enum peep_state));
   }
+#endif
 
   if (PEEP_STATE_BLE_CONFIG == state) {
+    LOGD("PEEP_STATE_BLE_CONFIG");
     xTaskCreate(
       task_ble_config_wifi_credentials,
       "ble config task",
@@ -47,15 +67,17 @@ app_main()
       NULL);
   }
   else if (PEEP_STATE_MEASURE == state) {
+    LOGD("PEEP_STATE_MEASURE");
     xTaskCreate(
       task_measure,
       "measurement task",
-      8192,
+      40960,
       NULL,
       2,
       NULL);
   }
   else if (PEEP_STATE_MEASURE_CONFIG == state) {
+    LOGD("PEEP_STATE_MEASURE_CONFIG");
     xTaskCreate(
       task_measure_config,
       "measurement config task",

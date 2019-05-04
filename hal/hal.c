@@ -21,7 +21,6 @@
 #define _PWM_RESOLUTION (LEDC_TIMER_16_BIT)
 #define _PWM_FREQ_HZ 1000
 
-
 /***** Local Data *****/
 
 static struct bme680_dev _bme680;
@@ -340,6 +339,8 @@ hal_deep_sleep(uint32_t sec)
 {
   esp_err_t r = ESP_OK;
   uint64_t wakeup_time_usec = sec * 1000000;
+
+  bme680_soft_reset(&_bme680);
 
   LOGI("Entering %d second deep sleep\n", sec);
 

@@ -1,10 +1,10 @@
 /***** Includes *****/
 
-#include "lwip/apps/sntp.h"
-
 #include "tasks.h"
-#include "aws-mqtt.h"
+#include "aws_mqtt.h"
+#include "aws_mqtt_shadow.h"
 #include "hal.h"
+#include "json_parse.h"
 #include "memory.h"
 #include "state.h"
 #include "system.h"
@@ -13,6 +13,11 @@
 /***** Defines *****/
 
 #define _BUFFER_LEN (2048)
+
+#ifdef PEEP_TEST_STATE_MEASURE_CONFIG
+  #define _TEST_WIFI_SSID "thesignal"
+  #define _TEST_WIFI_PASSWORD "palmerho"
+#endif
 
 /***** Extern Data *****/
 
@@ -30,6 +35,7 @@ extern const uint8_t _uuid_end[]   asm("_binary_uuid_txt_end");
 
 /***** Local Data *****/
 
+static struct hatch_configuration _config;
 static uint8_t * _buffer = NULL;
 static char * _ssid = NULL;
 static char * _pass = NULL;
@@ -40,58 +46,63 @@ static const int SYNC_BIT = BIT0;
 /***** Local Functions *****/
 
 static bool
-_init_time(void)
+_get_wifi_ssid_pasword(char * ssid, char * password)
 {
-  const int retry_max = 10;
-  struct tm timeinfo = {0};
-  time_t now = 0;
-  int retry = 0;
+  int len = 0;
   bool r = true;
 
-  time(&now);
-  localtime_r(&now, &timeinfo);
-  // Is time set? If not, tm_year will be (1970 - 1900).
-  if (timeinfo.tm_year < (2016 - 1900)) {
-    LOGI("time not set, initializing SNTP");
-    sntp_setoperatingmode(SNTP_OPMODE_POLL);
-    sntp_setservername(0, "pool.ntp.org");
-    sntp_init();
-
-    // wait for time to be set
-    while(timeinfo.tm_year < (2016 - 1900) && ++retry < retry_max) {
-      LOGI("waiting for time to sync... (%d/%d)", retry, retry_max);
-      vTaskDelay(2000 / portTICK_PERIOD_MS);
-      time(&now);
-      localtime_r(&now, &timeinfo);
+#ifdef PEEP_TEST_STATE_MEASURE_CONFIG
+  (void) len;
+  strcpy(ssid, _TEST_WIFI_SSID);
+  strcpy(password, _TEST_WIFI_PASSWORD);
+#else
+  if (r) {
+    len = memory_get_item(
+      MEMORY_ITEM_WIFI_SSID,
+      (uint8_t *) ssid,
+      WIFI_SSID_LEN_MAX);
+    if (len <= 0) {
+      r = false;
+    }
+    else {
+      LOGI("SSID = %s", ssid);
     }
   }
 
-  if (retry < retry_max) {
-    LOGI(
-      "%d-%d-%d %d:%d:%d",
-      timeinfo.tm_year + 1900,
-      timeinfo.tm_mon + 1,
-      timeinfo.tm_mday,
-      timeinfo.tm_hour,
-      timeinfo.tm_min,
-      timeinfo.tm_sec);
-    r = true;
+  if (r) {
+    len = memory_get_item(
+      MEMORY_ITEM_WIFI_PASS,
+      (uint8_t *) password,
+      WIFI_PASSWORD_LEN_MAX);
+    if (len <= 0) {
+      r = false;
+    }
+    else {
+      LOGI("PASS = %s", password);
+    }
   }
-  else {
-    LOGE("failed to sync time");
-    r = false;
-  }
+#endif
 
   return r;
 }
 
 static void
-_measure_config_cb(uint8_t * buf, uint16_t len)
+_shadow_callback(uint8_t * buf, uint16_t buf_len)
 {
-  memcpy(_buffer, buf, len);
-  _buffer[len] = 0;
+  bool r = true;
 
-  printf("%s\n", _buffer);
+  r = json_parse_hatch_config_msg((char *) buf, &_config);
+  if (r) {
+    LOGI("uuid=%s", _config.uuid);
+    LOGI("end_unix_timestamp=%d", _config.end_unix_timestamp);
+    LOGI("measure_interval_sec=%d", _config.measure_interval_sec);
+    xEventGroupSetBits(_sync_event_group, SYNC_BIT);
+  }
+  else {
+    LOGE("error decoding shadow JSON document");
+    LOGE("received %d bytes", buf_len);
+    ESP_LOG_BUFFER_HEXDUMP(__func__, buf, buf_len, ESP_LOG_ERROR);
+  }
 }
 
 /***** Global Functions *****/
@@ -100,15 +111,13 @@ void
 task_measure_config(void * arg)
 {
   EventBits_t bits = 0;
-  char * mqtt_topic = "hatchtrack/data/put";
+  char * peep_uuid = (char *) _uuid_start;
   char * root_ca = (char *) _root_ca_start;
   char * cert = (char *) _cert_start;
   char * key = (char *) _key_start;
   char * ssid = NULL;
   char * pass = NULL;
-  bool is_configured = false;
   bool r = true;
-  int len = 0;
 
   LOGI("start");
 
@@ -119,31 +128,13 @@ task_measure_config(void * arg)
   if ((NULL == _buffer) || (NULL == _ssid) || (NULL == _pass)) {
     LOGE_TRAP("failed to allocate memory");
   }
+  ssid = _ssid;
+  pass = _pass;
+
+  memset(&_config, 0, sizeof(struct hatch_configuration));
 
   if (r) {
-    len = memory_get_item(
-      MEMORY_ITEM_WIFI_SSID,
-      (uint8_t *) ssid,
-      WIFI_SSID_LEN_MAX);
-    if (len <= 0) {
-      r = false;
-    }
-    else {
-      LOGI("SSID = %s\n", ssid);
-    }
-  }
-
-  if (r) {
-    len = memory_get_item(
-      MEMORY_ITEM_WIFI_PASS,
-      (uint8_t *) pass,
-      WIFI_PASSWORD_LEN_MAX);
-    if (len <= 0) {
-      r = false;
-    }
-    else {
-      LOGI("PASS = %s\n", pass);
-    }
+    r = _get_wifi_ssid_pasword(ssid, pass);
   }
 
   if (r) {
@@ -151,38 +142,29 @@ task_measure_config(void * arg)
   }
 
   if (r) {
-    r = wifi_connect(ssid, pass);
+    r = wifi_connect(ssid, pass, 15);
   }
 
   if (r) {
-    r = _init_time();
+    r = aws_mqtt_shadow_init(root_ca, cert, key, peep_uuid, 5);
   }
 
   if (r) {
-    r = aws_mqtt_init(root_ca, cert, key, (char*) _uuid_start);
+    r = aws_mqtt_shadow_get(_shadow_callback);
   }
 
-  if (r) {
-    r = aws_mqtt_subsribe(mqtt_topic, _measure_config_cb);
+  while ((r) && (0 == (bits & SYNC_BIT))) {
+    aws_mqtt_shadow_poll(1000);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+
+    bits = xEventGroupWaitBits(
+      _sync_event_group,
+      SYNC_BIT,
+      false,
+      true,
+      0);
   }
 
-  while ((r) && (!is_configured)) {
-    bits = 0;
-    while (0 == (bits & SYNC_BIT)) {
-      aws_mqtt_subsribe_poll(1000);
-
-      // Wait for BLE config to complete.
-      bits = xEventGroupWaitBits(
-        _sync_event_group,
-        SYNC_BIT,
-        false,
-        true,
-        1000 / portTICK_PERIOD_MS);
-    }
-
-    aws_mqtt_unsubscribe(mqtt_topic);
-
-  }
-
+  wifi_disconnect();
   hal_deep_sleep(0);
 }

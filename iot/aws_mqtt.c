@@ -1,6 +1,7 @@
 /***** Includes *****/
 
-#include "aws-mqtt.h"
+#include "aws_mqtt.h"
+#include "aws_mqtt_common.h"
 #include "system.h"
 
 #include "aws_iot_config.h"
@@ -11,9 +12,6 @@
 
 /***** Defines *****/
 
-#define AWS_HOST_NAME "a1mdhmgt02ub52-ats.iot.us-west-2.amazonaws.com" // unique
-#define AWS_PORT_NUMBER 8883 // default
-
 #define AWS_TOPIC_NAME "hatchtrack/data/put"
 
 /***** Local Data *****/
@@ -23,26 +21,7 @@ static AWS_IoT_Client _client;
 /***** Local Functions *****/
 
 void
-ShadowUpdateStatusCallback(const char *pThingName, ShadowActions_t action,
-  Shadow_Ack_Status_t status, const char *pReceivedJsonDocument,
-  void *pContextData)
-{
-  IOT_UNUSED(pThingName);
-  IOT_UNUSED(action);
-  IOT_UNUSED(pReceivedJsonDocument);
-  IOT_UNUSED(pContextData);
-
-  if(SHADOW_ACK_TIMEOUT == status) {
-      ESP_LOGE(__func__, "Update timed out");
-  } else if(SHADOW_ACK_REJECTED == status) {
-      ESP_LOGE(__func__, "Update rejected");
-  } else if(SHADOW_ACK_ACCEPTED == status) {
-      ESP_LOGI(__func__, "Update accepted");
-  }
-}
-
-void
-disconnectCallbackHandler(AWS_IoT_Client *pClient, void *data)
+_disconnect_cb(AWS_IoT_Client *pClient, void *data)
 {
   ESP_LOGW(__func__, "MQTT Disconnect");
   IoT_Error_t rc = FAILURE;
@@ -52,21 +31,23 @@ disconnectCallbackHandler(AWS_IoT_Client *pClient, void *data)
   }
 
   if(aws_iot_is_autoreconnect_enabled(pClient)) {
-    ESP_LOGI(__func__, "Auto Reconnect is enabled, Reconnecting attempt will start now");
-  } else {
-    ESP_LOGW(__func__, "Auto Reconnect not enabled. Starting manual reconnect...");
+    LOGI("auto reconnect is enabled, attempting reconnect...");
+  }
+  else {
+    LOGI("auto reconnect not enabled, attempting manual reconnect...");
     rc = aws_iot_mqtt_attempt_reconnect(pClient);
     if(NETWORK_RECONNECTED == rc) {
-      ESP_LOGW(__func__, "Manual Reconnect Successful");
+      LOGI("manual reconnect successful");
     }
     else {
-      ESP_LOGW(__func__, "Manual Reconnect Failed - %d", rc);
+      LOGE("manual reconnect failed (%d)", rc);
     }
   }
 }
 
-void _subscribe_callback_handler(AWS_IoT_Client * p_client, char * topic,
-  uint16_t topic_len, IoT_Publish_Message_Params * params, void * p_data)
+void
+_subscribe_cb(AWS_IoT_Client * p_client, char * topic, uint16_t topic_len,
+  IoT_Publish_Message_Params * params, void * p_data)
 {
   aws_subscribe_cb cb = p_data;
 
@@ -77,7 +58,7 @@ void _subscribe_callback_handler(AWS_IoT_Client * p_client, char * topic,
 
 bool
 aws_mqtt_init(char * root_ca, char * client_cert, char * client_key, 
-  char * client_id)
+  char * client_id, int32_t timeout_sec)
 {
   IoT_Client_Init_Params mqtt_params = iotClientInitParamsDefault;
   IoT_Client_Connect_Params connect_params = iotClientConnectParamsDefault;
@@ -90,7 +71,7 @@ aws_mqtt_init(char * root_ca, char * client_cert, char * client_key,
   mqtt_params.mqttCommandTimeout_ms = 20000;
   mqtt_params.tlsHandshakeTimeout_ms = 5000;
   mqtt_params.isSSLHostnameVerify = true;
-  mqtt_params.disconnectHandler = disconnectCallbackHandler;
+  mqtt_params.disconnectHandler = _disconnect_cb;
   mqtt_params.disconnectHandlerData = NULL;
   mqtt_params.pRootCALocation = (const char *) root_ca;
   mqtt_params.pDeviceCertLocation = (const char *) client_cert;
@@ -112,16 +93,18 @@ aws_mqtt_init(char * root_ca, char * client_cert, char * client_key,
   if (r) {
     LOGI("Connecting to AWS...");
     do {
+      r = true;
       err = aws_iot_mqtt_connect(&_client, &connect_params);
       if(SUCCESS != err) {
+        r = false;
         LOGE(
-          "Error(%d) connecting to %s:%d",
-          err,
+          "Error connecting to %s:%d (%d)",
           mqtt_params.pHostURL,
-          mqtt_params.port);
+          mqtt_params.port,
+          err);
         vTaskDelay(1000 / portTICK_RATE_MS);
       }
-    } while (SUCCESS != err);
+    } while ((SUCCESS != err) && ((--timeout_sec) > 0));
     LOGI("Connected to AWS!\n");
   }
 
@@ -129,7 +112,7 @@ aws_mqtt_init(char * root_ca, char * client_cert, char * client_key,
 }
 
 bool
-aws_disconnect(void)
+aws_mqtt_disconnect(void)
 {
   IoT_Error_t r = SUCCESS;
 
@@ -159,7 +142,7 @@ aws_mqtt_publish(char * topic, char * message, bool retain)
 }
 
 bool
-aws_mqtt_subsribe(char * topic, aws_subscribe_cb cb)
+aws_mqtt_subscribe(char * topic, aws_subscribe_cb cb)
 {
   IoT_Error_t rc = FAILURE;
 
@@ -168,7 +151,7 @@ aws_mqtt_subsribe(char * topic, aws_subscribe_cb cb)
     topic,
     strlen(topic),
     QOS0,
-    _subscribe_callback_handler,
+    _subscribe_cb,
     cb);
 
   if(SUCCESS != rc) {
@@ -183,7 +166,7 @@ aws_mqtt_subsribe(char * topic, aws_subscribe_cb cb)
 }
 
 bool
-aws_mqtt_subsribe_poll(uint32_t poll_ms)
+aws_mqtt_subscribe_poll(uint32_t poll_ms)
 {
   IoT_Error_t rc = FAILURE;
 

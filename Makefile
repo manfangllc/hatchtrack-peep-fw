@@ -1,5 +1,5 @@
 export IDF_PATH := ./esp-idf
-PROJECT_NAME := hatchtrack-peep-fw
+export PROJECT_NAME := hatchtrack-peep-fw
 
 EXTRA_COMPONENT_DIRS := \
   ble \
@@ -12,7 +12,17 @@ EXTRA_COMPONENT_DIRS := \
 
 include $(IDF_PATH)/make/project.mk
 
-CFLAGS += -DPB_BUFFER_ONLY -DPB_FIELD_32BIT=1
+test-deep-sleep:
+	make -f Makefile.test-deep-sleep
+
+test-measure:
+	make -f Makefile.test-measure
+
+test-measure-config:
+	make -f Makefile.test-measure-config
+
+test-ble-config:
+	make -f Makefile.test-ble-config
 
 distclean: clean
 	rm -f sdkconfig.old

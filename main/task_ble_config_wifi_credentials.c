@@ -42,7 +42,8 @@ _ble_write_callback(uint8_t * buf, uint16_t len)
 static void
 _ble_read_callback(uint8_t * buf, uint16_t * len, uint16_t max_len)
 {
-  sprintf((char *) buf, "{\n\"uuid\": \"%s\"\n}", _uuid_start);
+  snprintf((char *) buf, max_len, "{\n\"uuid\": \"%s\"\n}", _uuid_start);
+  *len = strnlen((char *) buf, max_len);
   LOGI("sending...\n%s", (char *) buf);
 }
 
@@ -70,6 +71,25 @@ task_ble_config_wifi_credentials(void * arg)
   ble_register_write_callback(_ble_write_callback);
   ble_register_read_callback(_ble_read_callback);
 
+#if defined (PEEP_TEST_STATE_BLE_CONFIG)
+  while (1) {
+    // Wait for BLE config to complete.
+    bits = xEventGroupWaitBits(
+      _sync_event_group,
+      SYNC_BIT,
+      false,
+      true,
+      portMAX_DELAY);
+    
+    if (bits & SYNC_BIT) {
+      xEventGroupClearBits(_sync_event_group, SYNC_BIT);
+      LOGI("ssid = %s\n", _ssid);
+      LOGI("password = %s\n", _pass);
+      _ssid[0] = 0;
+      _pass[0] = 0;
+    }
+  }
+#else
   // Wait for BLE config to complete.
   bits = xEventGroupWaitBits(
     _sync_event_group,
@@ -101,6 +121,7 @@ task_ble_config_wifi_credentials(void * arg)
       (uint8_t *) &state,
       sizeof(enum peep_state));
   }
+#endif
 
   hal_deep_sleep(0);
 }

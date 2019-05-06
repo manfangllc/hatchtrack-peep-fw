@@ -55,6 +55,7 @@ _get_wifi_ssid_pasword(char * ssid, char * password)
   (void) len;
   strcpy(ssid, _TEST_WIFI_SSID);
   strcpy(password, _TEST_WIFI_PASSWORD);
+  LOGI("SSID=%s, PASS=%s", ssid, password);
 #else
   if (r) {
     len = memory_get_item(
@@ -131,26 +132,32 @@ task_measure_config(void * arg)
   memset(&_config, 0, sizeof(struct hatch_configuration));
 
   if (r) {
+    TRACE();
     r = _get_wifi_ssid_pasword(ssid, pass);
   }
 
   if (r) {
+    TRACE();
     r = hal_init();
   }
 
   if (r) {
+    TRACE();
     r = wifi_connect(ssid, pass, 15);
   }
 
   if (r) {
+    TRACE();
     r = aws_mqtt_shadow_init(root_ca, cert, key, peep_uuid, 5);
   }
 
   if (r) {
+    TRACE();
     r = aws_mqtt_shadow_get(_shadow_callback);
   }
 
   while ((r) && (0 == (bits & SYNC_BIT))) {
+    TRACE();
     aws_mqtt_shadow_poll(1000);
     vTaskDelay(100 / portTICK_PERIOD_MS);
 
@@ -169,8 +176,6 @@ task_measure_config(void * arg)
   LOGI("end_unix_timestamp=%d", _config.end_unix_timestamp);
   LOGI("measure_interval_sec=%d", _config.measure_interval_sec);
   LOGI("temperature_offset_celsius=%d", _config.temperature_offset_celsius);
-
-  hal_deep_sleep_timer(0);
 #else
   memory_set_item(
     MEMORY_ITEM_HATCH_CONFIG,
@@ -185,7 +190,7 @@ task_measure_config(void * arg)
     MEMORY_ITEM_STATE,
     (uint8_t *) &state,
     sizeof(enum peep_state));
+#endif
 
   hal_deep_push_button();
-#endif
 }

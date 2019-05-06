@@ -30,7 +30,7 @@ app_main()
   RESULT_TEST_ERROR_TRACE(r);
 
 #if defined (PEEP_TEST_STATE_DEEP_SLEEP)
-  hal_deep_sleep(600);
+  hal_deep_sleep(60);
   // will not return from above
 #elif defined(PEEP_TEST_STATE_MEASURE)
   (void) len;

@@ -123,5 +123,5 @@ task_ble_config_wifi_credentials(void * arg)
   }
 #endif
 
-  hal_deep_sleep(0);
+  hal_deep_sleep_timer(0);
 }

@@ -93,9 +93,6 @@ _shadow_callback(uint8_t * buf, uint16_t buf_len)
 
   r = json_parse_hatch_config_msg((char *) buf, &_config);
   if (r) {
-    LOGI("uuid=%s", _config.uuid);
-    LOGI("end_unix_timestamp=%d", _config.end_unix_timestamp);
-    LOGI("measure_interval_sec=%d", _config.measure_interval_sec);
     xEventGroupSetBits(_sync_event_group, SYNC_BIT);
   }
   else {
@@ -166,5 +163,29 @@ task_measure_config(void * arg)
   }
 
   wifi_disconnect();
-  hal_deep_sleep(0);
+
+#if defined(PEEP_TEST_STATE_MEASURE_CONFIG)
+  LOGI("uuid=%s", _config.uuid);
+  LOGI("end_unix_timestamp=%d", _config.end_unix_timestamp);
+  LOGI("measure_interval_sec=%d", _config.measure_interval_sec);
+  LOGI("temperature_offset_celsius=%d", _config.temperature_offset_celsius);
+
+  hal_deep_sleep_timer(0);
+#else
+  memory_set_item(
+    MEMORY_ITEM_HATCH_CONFIG,
+    (uint8_t *) &_config,
+    sizeof(struct hatch_configuration));
+
+  // feed watchdog
+  vTaskDelay(10);
+
+  enum peep_state state = PEEP_STATE_MEASURE;
+  memory_set_item(
+    MEMORY_ITEM_STATE,
+    (uint8_t *) &state,
+    sizeof(enum peep_state));
+
+  hal_deep_push_button();
+#endif
 }

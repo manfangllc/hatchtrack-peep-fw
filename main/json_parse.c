@@ -115,6 +115,9 @@ json_parse_hatch_config_msg(char * js, struct hatch_configuration * config)
     else if (0 == strcmp(key, "measureIntervalSec")) {
       config->measure_interval_sec = strtol(value, NULL, 0);
     }
+    else if (0 == strcmp(key, "temperatureOffsetCelsius")) {
+      config->temperature_offset_celsius = strtol(value, NULL, 0);
+    }
 
     n++;
   }

@@ -5,6 +5,7 @@
 #include "icm20602.h"
 #include "driver/i2c.h"
 #include "driver/ledc.h"
+#include "driver/rtc_io.h"
 
 /***** Defines *****/
 
@@ -294,6 +295,8 @@ _push_button_init(void)
   gpio_config_t io_conf;
   esp_err_t err = ESP_OK;
 
+  rtc_gpio_deinit(_PIN_NUM_BTN);
+
   _push_button_queue = xQueueCreate(4, sizeof(bool));
 
   //hook isr handler for gpio pins
@@ -315,7 +318,6 @@ _push_button_init(void)
 bool
 hal_init(void)
 {
-
   bool r = true;
 
   if (r) {
@@ -335,7 +337,7 @@ hal_init(void)
 }
 
 void
-hal_deep_sleep(uint32_t sec)
+hal_deep_sleep_timer(uint32_t sec)
 {
   esp_err_t r = ESP_OK;
   uint64_t wakeup_time_usec = sec * 1000000;
@@ -346,6 +348,18 @@ hal_deep_sleep(uint32_t sec)
 
   r = esp_sleep_enable_timer_wakeup(wakeup_time_usec);
   RESULT_TEST((ESP_OK == r), "failed to set wakeup timer");
+
+  // Will not return from the above function.
+  esp_deep_sleep_start();
+}
+
+void
+hal_deep_push_button(void)
+{
+  esp_err_t r = ESP_OK;
+
+  rtc_gpio_init(_PIN_NUM_BTN);
+  esp_sleep_enable_ext0_wakeup(_PIN_NUM_BTN, 0);
 
   // Will not return from the above function.
   esp_deep_sleep_start();

@@ -143,12 +143,12 @@ task_measure_config(void * arg)
 
   if (r) {
     TRACE();
-    r = wifi_connect(ssid, pass, 15);
+    r = wifi_connect(ssid, pass, 60);
   }
 
   if (r) {
     TRACE();
-    r = aws_mqtt_shadow_init(root_ca, cert, key, peep_uuid, 5);
+    r = aws_mqtt_shadow_init(root_ca, cert, key, peep_uuid, 60);
   }
 
   if (r) {

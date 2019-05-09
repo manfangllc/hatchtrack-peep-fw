@@ -25,6 +25,11 @@ listed above.
 ```
 git submodule update --init --recursive
 ```
+Further, the repositroy should be cleaned of any old build artifacts
+originating from older commits by running the following Makefile rule.
+```
+make distclean
+```
 
 As an alternative, a rule is in place with the top level makefile to clean the
 repository and synchronize all git commits in the repo. This can be done by

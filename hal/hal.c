@@ -187,6 +187,35 @@ _bme680_init(void)
 }
 
 static bool
+_bme680_sleep(void)
+{
+  int status = 0;
+  bool r = true;
+
+  const uint16_t sensor_settings =
+    BME680_OST_SEL |
+    BME680_OSH_SEL |
+    BME680_OSP_SEL |
+    BME680_FILTER_SEL |
+    BME680_GAS_SENSOR_SEL;
+
+  if (r) {
+    bme680_soft_reset(&_bme680);
+
+    vTaskDelay(500 / portTICK_PERIOD_MS);
+
+    _bme680.gas_sett.run_gas = BME680_DISABLE_GAS_MEAS;
+    _bme680.power_mode = BME680_SLEEP_MODE;
+    status = bme680_set_sensor_settings(sensor_settings, &_bme680);
+    if (0 > status) {
+      r = false;
+    }
+  }
+
+  return r;
+}
+
+static bool
 _icm20602_init(void)
 {
   int status = 0;
@@ -254,7 +283,7 @@ hal_init(void)
   }
 
   if (r) {
-    r = _icm20602_init();
+    //r = _icm20602_init();
   }
 
   return r;
@@ -266,7 +295,7 @@ hal_deep_sleep_timer(uint32_t sec)
   esp_err_t r = ESP_OK;
   uint64_t wakeup_time_usec = sec * 1000000;
 
-  bme680_soft_reset(&_bme680);
+  _bme680_sleep();
 
   LOGI("Entering %d second deep sleep\n", sec);
 

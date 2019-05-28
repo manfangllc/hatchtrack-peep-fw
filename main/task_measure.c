@@ -4,9 +4,11 @@
 
 #include "tasks.h"
 #include "aws_mqtt.h"
+#include "aws_mqtt_shadow.h"
 #include "hal.h"
 #include "hatch_config.h"
 #include "hatch_measurement.h"
+#include "json_parse.h"
 #include "memory.h"
 #include "memory_measurement_db.h"
 #include "state.h"
@@ -50,9 +52,13 @@ extern const uint8_t _uuid_end[]   asm("_binary_uuid_txt_end");
 
 /***** Local Data *****/
 
+static struct hatch_configuration _config;
 static uint8_t * _buffer = NULL;
 static char * _ssid = NULL;
 static char * _pass = NULL;
+
+static EventGroupHandle_t _sync_event_group = NULL;
+static const int SYNC_BIT = BIT0;
 
 /***** Local Functions *****/
 
@@ -208,12 +214,32 @@ _get_hatch_config(struct hatch_configuration * config)
   return r;
 }
 
+static void
+_shadow_callback(uint8_t * buf, uint16_t buf_len)
+{
+  bool r = true;
+
+#ifdef PEEP_TEST_STATE_MEASURE
+  LOGI("AWS Shadow: %s", buf);
+#endif
+
+  r = json_parse_hatch_config_msg((char *) buf, &_config);
+  if (r) {
+    xEventGroupSetBits(_sync_event_group, SYNC_BIT);
+  }
+  else {
+    LOGE("error decoding shadow JSON document");
+    LOGE("received %d bytes", buf_len);
+    ESP_LOG_BUFFER_HEXDUMP(__func__, buf, buf_len, ESP_LOG_ERROR);
+  }
+}
+
 /***** Global Functions *****/
 
 void
 task_measure(void * arg)
 {
-  struct hatch_configuration config;
+  EventBits_t bits = 0;
   struct hatch_measurement meas;
   char * peep_uuid = (char *) _uuid_start;
   char * root_ca = (char *) _root_ca_start;
@@ -221,11 +247,13 @@ task_measure(void * arg)
   char * key = (char *) _key_start;
   char * ssid = _ssid;
   char * pass = _pass;
+  bool is_shadow_connected = false;
   bool is_local_measure = false;
   bool r = true;
 
   LOGI("start");
 
+  _sync_event_group = xEventGroupCreate();
   _buffer = malloc(_BUFFER_LEN);
   _ssid = malloc(WIFI_SSID_LEN_MAX);
   _pass = malloc(WIFI_PASSWORD_LEN_MAX);
@@ -237,10 +265,6 @@ task_measure(void * arg)
 
   if (r) {
     r = _get_wifi_ssid_pasword(ssid, pass);
-  }
-
-  if (r) {
-    r = _get_hatch_config(&config);
   }
 
   if (r) {
@@ -264,6 +288,32 @@ task_measure(void * arg)
   }
 
   if (r && !is_local_measure) {
+    r = aws_mqtt_shadow_init(root_ca, cert, key, peep_uuid, 60);
+  }
+
+  if (r && !is_local_measure) {
+    r = aws_mqtt_shadow_get(_shadow_callback);
+    is_shadow_connected = true;
+  }
+
+  while ((r) && (0 == (bits & SYNC_BIT))) {
+    TRACE();
+    aws_mqtt_shadow_poll(2500);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+
+    bits = xEventGroupWaitBits(
+      _sync_event_group,
+      SYNC_BIT,
+      false,
+      true,
+      0);
+  }
+
+  if (is_shadow_connected) {
+    aws_mqtt_shadow_disconnect();
+  }
+
+  if (r && !is_local_measure) {
     LOGD("connecting to AWS");
     r = aws_mqtt_init(root_ca, cert, key, peep_uuid, 5);
     is_local_measure = (r) ? false : true;
@@ -279,7 +329,7 @@ task_measure(void * arg)
   }
 
   if (r) {
-    if (meas.unix_timestamp >= config.end_unix_timestamp) {
+    if (meas.unix_timestamp >= _config.end_unix_timestamp) {
       LOGD("end of measurement time reached");
       enum peep_state state = PEEP_STATE_MEASURE_CONFIG;
       memory_set_item(
@@ -296,7 +346,7 @@ task_measure(void * arg)
       _BUFFER_LEN,
       &meas,
       (char *) _uuid_start,
-      config.uuid);
+      _config.uuid);
   }
   else if (r && is_local_measure) {
     uint32_t total = 0;
@@ -310,5 +360,5 @@ task_measure(void * arg)
   }
 
   wifi_disconnect();
-  hal_deep_sleep_timer(config.measure_interval_sec);
+  hal_deep_sleep_timer(_config.measure_interval_sec);
 }

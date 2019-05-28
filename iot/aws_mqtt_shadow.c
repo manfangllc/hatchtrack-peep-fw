@@ -117,6 +117,7 @@ aws_mqtt_shadow_init(char * root_ca, char * client_cert, char * client_key,
   }
 
   if (r) {
+    LOGI("shadow set autoreconnect");
     err = aws_iot_shadow_set_autoreconnect_status(&_client, true);
     if (SUCCESS != err) {
         LOGE("aws_iot_shadow_set_autoreconnect_status error (%d)", err);
@@ -146,12 +147,13 @@ aws_mqtt_shadow_get(aws_mqtt_shadow_cb cb)
 {
   IoT_Error_t err = SUCCESS;
 
+  LOGI("shadow get thing %s", _thing_name);
   err = aws_iot_shadow_get(
     &_client,
     _thing_name,
     _shadow_get_cb,
     cb,
-    180,
+    30,
     false);
   if (SUCCESS != err) {
     LOGE("aws_iot_shadow_get error (%d)", err);
@@ -166,6 +168,9 @@ aws_mqtt_shadow_poll(uint32_t poll_ms)
   IoT_Error_t err = SUCCESS;
 
   err = aws_iot_shadow_yield(&_client, poll_ms);
+  if (SUCCESS != err) {
+    LOGE("aws_iot_shadow_yield error (%d)", err);
+  }
 
   return (SUCCESS == err) ? true : false;
 }

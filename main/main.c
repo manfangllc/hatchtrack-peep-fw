@@ -71,7 +71,7 @@ app_main()
     xTaskCreate(
       task_measure,
       "measurement task",
-      40960,
+      10240,
       NULL,
       2,
       NULL);

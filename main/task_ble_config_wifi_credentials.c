@@ -99,7 +99,7 @@ task_ble_config_wifi_credentials(void * arg)
     portMAX_DELAY);
 
   if (bits & SYNC_BIT) {
-    enum peep_state state = PEEP_STATE_MEASURE_CONFIG;
+    enum peep_state state = PEEP_STATE_MEASURE;
     memory_set_item(
       MEMORY_ITEM_WIFI_SSID,
       (uint8_t *) _ssid,
@@ -123,5 +123,5 @@ task_ble_config_wifi_credentials(void * arg)
   }
 #endif
 
-  hal_deep_sleep_timer(0);
+  hal_deep_sleep_push_button();
 }

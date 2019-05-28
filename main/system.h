@@ -35,7 +35,7 @@
   ESP_LOG_LEVEL_LOCAL(ESP_LOG_DEBUG, __func__, format, ##__VA_ARGS__)
 
 #define TRACE() \
-  LOGD("%d", __LINE__);
+  LOGI("%d", __LINE__);
 
 #define RESULT_TEST(cond, format, ...) \
   if (!(cond)) { \

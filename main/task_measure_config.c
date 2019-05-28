@@ -138,11 +138,6 @@ task_measure_config(void * arg)
 
   if (r) {
     TRACE();
-    r = hal_init();
-  }
-
-  if (r) {
-    TRACE();
     r = wifi_connect(ssid, pass, 60);
   }
 
@@ -193,6 +188,6 @@ task_measure_config(void * arg)
     (uint8_t *) &state,
     sizeof(enum peep_state));
 
-  hal_deep_push_button();
+  hal_deep_sleep_push_button();
 #endif
 }

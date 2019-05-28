@@ -176,6 +176,8 @@ task_measure_config(void * arg)
   LOGI("end_unix_timestamp=%d", _config.end_unix_timestamp);
   LOGI("measure_interval_sec=%d", _config.measure_interval_sec);
   LOGI("temperature_offset_celsius=%d", _config.temperature_offset_celsius);
+
+  hal_deep_sleep_timer(30);
 #else
   memory_set_item(
     MEMORY_ITEM_HATCH_CONFIG,
@@ -190,7 +192,7 @@ task_measure_config(void * arg)
     MEMORY_ITEM_STATE,
     (uint8_t *) &state,
     sizeof(enum peep_state));
-#endif
 
   hal_deep_push_button();
+#endif
 }

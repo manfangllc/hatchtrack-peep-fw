@@ -19,6 +19,7 @@ struct hatch_configuration {
   char uuid[UUID_BUF_LEN];
   uint32_t end_unix_timestamp;
   uint32_t measure_interval_sec;
+  uint32_t temperature_offset_celsius;
 };
 
 #endif

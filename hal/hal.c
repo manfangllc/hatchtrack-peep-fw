@@ -5,6 +5,7 @@
 #include "icm20602.h"
 #include "driver/i2c.h"
 #include "driver/ledc.h"
+#include "driver/rtc_io.h"
 
 /***** Defines *****/
 
@@ -16,10 +17,6 @@
 #define _I2C_ADDR_ICM20602 (0x69)
 
 #define _PIN_NUM_BTN 0
-
-#define _PWM_PIEZO_PIN 18
-#define _PWM_RESOLUTION (LEDC_TIMER_16_BIT)
-#define _PWM_FREQ_HZ 1000
 
 /***** Local Data *****/
 
@@ -246,82 +243,12 @@ _icm20602_init(void)
 }
 
 static bool
-_piezo_init(void)
-{
-  ledc_channel_config_t ledc_conf;
-  ledc_timer_config_t timer_conf;
-  esp_err_t err = ESP_OK;
-  bool r = true;
-
-  if (r) {
-    timer_conf.duty_resolution = _PWM_RESOLUTION;
-    timer_conf.freq_hz = _PWM_FREQ_HZ;
-    timer_conf.speed_mode = _speed_mode;
-    timer_conf.timer_num = LEDC_TIMER_0;
-    err = ledc_timer_config(&timer_conf);
-    if (ESP_OK != err) {
-      r = false;
-    }
-  }
-
-  if (r) {
-    ledc_conf.timer_sel = LEDC_TIMER_0;
-    ledc_conf.channel = _channel;
-    ledc_conf.duty = 0;
-    ledc_conf.gpio_num = _PWM_PIEZO_PIN;
-    ledc_conf.intr_type = LEDC_INTR_DISABLE;
-    ledc_conf.speed_mode = LEDC_HIGH_SPEED_MODE;
-    ledc_conf.hpoint = UINT16_MAX - 1;
-    err = ledc_channel_config(&ledc_conf);
-    if (ESP_OK != err) {
-      r = false;
-    }
-  }
-
-  return r;
-}
-
-static bool
-_piezo_on(void)
-{
-  esp_err_t err = ESP_OK;
-
-  if (ESP_OK == err) {
-    err = ledc_set_duty(_speed_mode, _channel, 200);
-  }
-
-  if (ESP_OK == err) {
-    err = ledc_update_duty(_speed_mode, _channel);
-  }
-
-  return (ESP_OK == err) ? true : false;
-}
-
-static bool
-_piezo_off(void)
-{
-  esp_err_t err = ESP_OK;
-
-  if (ESP_OK == err) {
-    err = ledc_set_duty(_speed_mode, _channel, 0);
-  }
-
-  if (ESP_OK == err) {
-    err = ledc_update_duty(_speed_mode, _channel);
-  }
-
-  if (ESP_OK == err) {
-    err = ledc_stop(_speed_mode, _channel, 0);
-  }
-
-  return (ESP_OK == err) ? true : false;
-}
-
-static bool
 _push_button_init(void)
 {
   gpio_config_t io_conf;
   esp_err_t err = ESP_OK;
+
+  rtc_gpio_deinit(_PIN_NUM_BTN);
 
   _push_button_queue = xQueueCreate(4, sizeof(bool));
 
@@ -344,7 +271,6 @@ _push_button_init(void)
 bool
 hal_init(void)
 {
-
   bool r = true;
 
   if (r) {
@@ -364,7 +290,7 @@ hal_init(void)
 }
 
 void
-hal_deep_sleep(uint32_t sec)
+hal_deep_sleep_timer(uint32_t sec)
 {
   esp_err_t r = ESP_OK;
   uint64_t wakeup_time_usec = sec * 1000000;
@@ -375,6 +301,19 @@ hal_deep_sleep(uint32_t sec)
 
   r = esp_sleep_enable_timer_wakeup(wakeup_time_usec);
   RESULT_TEST((ESP_OK == r), "failed to set wakeup timer");
+
+  // Will not return from the above function.
+  esp_deep_sleep_start();
+}
+
+void
+hal_deep_push_button(void)
+{
+  esp_err_t r = ESP_OK;
+
+  rtc_gpio_init(_PIN_NUM_BTN);
+  r = esp_sleep_enable_ext0_wakeup(_PIN_NUM_BTN, 0);
+  RESULT_TEST((ESP_OK == r), "failed to set ext0 wakeup pin %d", _PIN_NUM_BTN);
 
   // Will not return from the above function.
   esp_deep_sleep_start();
@@ -525,28 +464,6 @@ TEST_CASE("HAL ICM20602", "[hal.c]")
 
   printf("* Free I2C interface.\n");
   r = _i2c_master_free();
-  TEST_ASSERT(r);
-}
-
-TEST_CASE("HAL piezo", "[hal.c]")
-{
-  bool r = true;
-
-  printf("* Initializing PWM interface.\n");
-  r = _piezo_init();
-  TEST_ASSERT(r);
-
-  printf("* Turning on piezo.\n");
-  r = _piezo_on();
-  TEST_ASSERT(r);
-
-  vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-  printf("* Turning off piezo.\n");
-  r = _piezo_off();
-  TEST_ASSERT(r);
-
-  r = unit_test_prompt_yn("* Did the piezo turn on?");
   TEST_ASSERT(r);
 }
 

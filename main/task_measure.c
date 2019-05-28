@@ -310,5 +310,5 @@ task_measure(void * arg)
   }
 
   wifi_disconnect();
-  hal_deep_sleep(config.measure_interval_sec);
+  hal_deep_sleep_timer(config.measure_interval_sec);
 }

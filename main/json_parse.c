@@ -88,6 +88,8 @@ json_parse_hatch_config_msg(char * js, struct hatch_configuration * config)
     return false;
   }
 
+  LOGD("json: %s", js);
+
   for (n = 1; n < r; n++) {
     json_value = t[n+1];
     json_key = t[n];
@@ -112,8 +114,11 @@ json_parse_hatch_config_msg(char * js, struct hatch_configuration * config)
     else if (0 == strcmp(key, "endUnixTimestamp")) {
       config->end_unix_timestamp = strtol(value, NULL, 0);
     }
-    else if (0 == strcmp(key, "measureIntervalSec")) {
-      config->measure_interval_sec = strtol(value, NULL, 0);
+    else if (0 == strcmp(key, "measureIntervalMin")) {
+      config->measure_interval_sec = strtol(value, NULL, 0) * 60;
+    }
+    else if (0 == strcmp(key, "temperatureOffsetCelsius")) {
+      config->temperature_offset_celsius = strtol(value, NULL, 0);
     }
 
     n++;

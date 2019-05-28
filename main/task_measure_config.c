@@ -55,6 +55,7 @@ _get_wifi_ssid_pasword(char * ssid, char * password)
   (void) len;
   strcpy(ssid, _TEST_WIFI_SSID);
   strcpy(password, _TEST_WIFI_PASSWORD);
+  LOGI("SSID=%s, PASS=%s", ssid, password);
 #else
   if (r) {
     len = memory_get_item(
@@ -93,9 +94,6 @@ _shadow_callback(uint8_t * buf, uint16_t buf_len)
 
   r = json_parse_hatch_config_msg((char *) buf, &_config);
   if (r) {
-    LOGI("uuid=%s", _config.uuid);
-    LOGI("end_unix_timestamp=%d", _config.end_unix_timestamp);
-    LOGI("measure_interval_sec=%d", _config.measure_interval_sec);
     xEventGroupSetBits(_sync_event_group, SYNC_BIT);
   }
   else {
@@ -134,26 +132,32 @@ task_measure_config(void * arg)
   memset(&_config, 0, sizeof(struct hatch_configuration));
 
   if (r) {
+    TRACE();
     r = _get_wifi_ssid_pasword(ssid, pass);
   }
 
   if (r) {
+    TRACE();
     r = hal_init();
   }
 
   if (r) {
-    r = wifi_connect(ssid, pass, 15);
+    TRACE();
+    r = wifi_connect(ssid, pass, 60);
   }
 
   if (r) {
-    r = aws_mqtt_shadow_init(root_ca, cert, key, peep_uuid, 5);
+    TRACE();
+    r = aws_mqtt_shadow_init(root_ca, cert, key, peep_uuid, 60);
   }
 
   if (r) {
+    TRACE();
     r = aws_mqtt_shadow_get(_shadow_callback);
   }
 
   while ((r) && (0 == (bits & SYNC_BIT))) {
+    TRACE();
     aws_mqtt_shadow_poll(1000);
     vTaskDelay(100 / portTICK_PERIOD_MS);
 
@@ -166,5 +170,29 @@ task_measure_config(void * arg)
   }
 
   wifi_disconnect();
-  hal_deep_sleep(0);
+
+#if defined(PEEP_TEST_STATE_MEASURE_CONFIG)
+  LOGI("uuid=%s", _config.uuid);
+  LOGI("end_unix_timestamp=%d", _config.end_unix_timestamp);
+  LOGI("measure_interval_sec=%d", _config.measure_interval_sec);
+  LOGI("temperature_offset_celsius=%d", _config.temperature_offset_celsius);
+
+  hal_deep_sleep_timer(30);
+#else
+  memory_set_item(
+    MEMORY_ITEM_HATCH_CONFIG,
+    (uint8_t *) &_config,
+    sizeof(struct hatch_configuration));
+
+  // feed watchdog
+  vTaskDelay(10);
+
+  enum peep_state state = PEEP_STATE_MEASURE;
+  memory_set_item(
+    MEMORY_ITEM_STATE,
+    (uint8_t *) &state,
+    sizeof(enum peep_state));
+
+  hal_deep_push_button();
+#endif
 }

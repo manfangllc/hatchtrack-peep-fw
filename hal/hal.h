@@ -11,7 +11,10 @@ extern bool
 hal_init(void);
 
 extern void
-hal_deep_sleep(uint32_t sec);
+hal_deep_sleep_timer(uint32_t sec);
+
+extern void
+hal_deep_push_button(void);
 
 extern bool
 hal_read_temperature_humdity_pressure_resistance(float * p_temperature,

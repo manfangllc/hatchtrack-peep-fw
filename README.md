@@ -43,8 +43,8 @@ make gitclean
 
 #### Toolchain
 An ESP32 toolchain is required to build the firmware. The project is configured
-to find it located in the `/opt` directory (`/opt/xtensa-esp32-elf`), but the
-path can be altered by running `make menuconfig`.
+to find it in the user's PATH environment variable, but this can be altered
+by running `make menuconfig` and manually setting the toolchain path.
 
 #### Python
 Espressif requires the Python2 modules listed in `./esp-idf/requirements.txt`

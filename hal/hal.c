@@ -297,7 +297,7 @@ hal_deep_sleep_timer(uint32_t sec)
 
   _bme680_sleep();
 
-  LOGI("Entering %d second deep sleep\n", sec);
+  LOGI("entering %d second deep sleep\n", sec);
 
   r = esp_sleep_enable_timer_wakeup(wakeup_time_usec);
   RESULT_TEST((ESP_OK == r), "failed to set wakeup timer");
@@ -307,9 +307,11 @@ hal_deep_sleep_timer(uint32_t sec)
 }
 
 void
-hal_deep_push_button(void)
+hal_deep_sleep_push_button(void)
 {
   esp_err_t r = ESP_OK;
+
+  LOGI("entering deep sleep with push button wakeup\n");
 
   rtc_gpio_init(_PIN_NUM_BTN);
   r = esp_sleep_enable_ext0_wakeup(_PIN_NUM_BTN, 0);

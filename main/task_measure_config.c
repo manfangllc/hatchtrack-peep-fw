@@ -13,6 +13,7 @@
 /***** Defines *****/
 
 #define _BUFFER_LEN (2048)
+#define _AWS_SHADOW_GET_TIMEOUT_SEC (30)
 
 #ifdef PEEP_TEST_STATE_MEASURE_CONFIG
   #define _TEST_WIFI_SSID "thesignal"
@@ -138,11 +139,6 @@ task_measure_config(void * arg)
 
   if (r) {
     TRACE();
-    r = hal_init();
-  }
-
-  if (r) {
-    TRACE();
     r = wifi_connect(ssid, pass, 60);
   }
 
@@ -153,7 +149,7 @@ task_measure_config(void * arg)
 
   if (r) {
     TRACE();
-    r = aws_mqtt_shadow_get(_shadow_callback);
+    r = aws_mqtt_shadow_get(_shadow_callback, _AWS_SHADOW_GET_TIMEOUT_SEC);
   }
 
   while ((r) && (0 == (bits & SYNC_BIT))) {
@@ -193,6 +189,6 @@ task_measure_config(void * arg)
     (uint8_t *) &state,
     sizeof(enum peep_state));
 
-  hal_deep_push_button();
+  hal_deep_sleep_push_button();
 #endif
 }

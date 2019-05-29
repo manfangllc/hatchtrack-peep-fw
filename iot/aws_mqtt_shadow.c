@@ -143,7 +143,7 @@ aws_mqtt_shadow_disconnect(void)
 }
 
 bool
-aws_mqtt_shadow_get(aws_mqtt_shadow_cb cb)
+aws_mqtt_shadow_get(aws_mqtt_shadow_cb cb, uint8_t timeout_sec)
 {
   IoT_Error_t err = SUCCESS;
 
@@ -153,7 +153,7 @@ aws_mqtt_shadow_get(aws_mqtt_shadow_cb cb)
     _thing_name,
     _shadow_get_cb,
     cb,
-    30,
+    timeout_sec,
     false);
   if (SUCCESS != err) {
     LOGE("aws_iot_shadow_get error (%d)", err);

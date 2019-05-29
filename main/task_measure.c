@@ -19,11 +19,11 @@
 
 // Comment this out to enter deep sleep when not active.
 //#define _NO_DEEP_SLEEP 1
-#define _BUFFER_LEN 2048
-
+#define _BUFFER_LEN (2048)
+#define _AWS_SHADOW_GET_TIMEOUT_SEC (30)
 #define _UNIX_TIMESTAMP_THRESHOLD (1546300800)
 
-#ifdef PEEP_TEST_STATE_MEASURE
+#if defined(PEEP_TEST_STATE_MEASURE) || (PEEP_TEST_STATE_MEASURE_CONFIG)
   // SSID of the WiFi AP connect to.
   #define _TEST_WIFI_SSID "thesignal"
   // Password of the WiFi AP to connect to.
@@ -186,6 +186,8 @@ _get_wifi_ssid_pasword(char * ssid, char * password)
   return r;
 }
 
+// TODO: Remove?
+/*
 static bool
 _get_hatch_config(struct hatch_configuration * config)
 {
@@ -213,13 +215,14 @@ _get_hatch_config(struct hatch_configuration * config)
 
   return r;
 }
+*/
 
 static void
 _shadow_callback(uint8_t * buf, uint16_t buf_len)
 {
   bool r = true;
 
-#ifdef PEEP_TEST_STATE_MEASURE
+#if defined(PEEP_TEST_STATE_MEASURE) || defined(PEEP_TEST_STATE_MEASURE_CONFIG)
   LOGI("AWS Shadow: %s", buf);
 #endif
 
@@ -253,6 +256,12 @@ task_measure(void * arg)
 
   LOGI("start");
 
+  #if defined(PEEP_TEST_STATE_MEASURE)
+  LOGI("PEEP_TEST_STATE_MEASURE");
+  #elif defined(PEEP_TEST_STATE_MEASURE_CONFIG)
+  LOGI("PEEP_TEST_STATE_MEASURE_CONFIG");
+  #endif
+
   _sync_event_group = xEventGroupCreate();
   _buffer = malloc(_BUFFER_LEN);
   _ssid = malloc(WIFI_SSID_LEN_MAX);
@@ -268,11 +277,12 @@ task_measure(void * arg)
   }
 
   if (r) {
+    LOGI("initializing hardware");
     r = hal_init();
   }
 
   if (r) {
-    LOGD("performing measurement");
+    LOGI("performing measurement");
     r = hal_read_temperature_humdity_pressure_resistance(
       &(meas.temperature),
       &(meas.humidity),
@@ -281,18 +291,20 @@ task_measure(void * arg)
   }
 
   if (r && !is_local_measure) {
-    LOGD("connecting to WiFi SSID %s", ssid);
+    LOGI("WiFi connect to SSID %s", ssid);
     r = wifi_connect(ssid, pass, 15);
     is_local_measure = (r) ? false : true;
     r = true;
   }
 
   if (r && !is_local_measure) {
+    LOGI("AWS MQTT shadow connect");
     r = aws_mqtt_shadow_init(root_ca, cert, key, peep_uuid, 60);
   }
 
   if (r && !is_local_measure) {
-    r = aws_mqtt_shadow_get(_shadow_callback);
+    LOGI("AWS MQTT shadow get timeout %d seconds", _AWS_SHADOW_GET_TIMEOUT_SEC);
+    r = aws_mqtt_shadow_get(_shadow_callback, _AWS_SHADOW_GET_TIMEOUT_SEC);
     is_shadow_connected = true;
   }
 
@@ -310,11 +322,18 @@ task_measure(void * arg)
   }
 
   if (is_shadow_connected) {
+    LOGI("AWS MQTT shadow disconnect");
     aws_mqtt_shadow_disconnect();
   }
 
+  #ifdef PEEP_TEST_STATE_MEASURE_CONFIG
+  LOGI("WiFi disconnect");
+  wifi_disconnect();
+  hal_deep_sleep_timer(60);
+  #endif
+
   if (r && !is_local_measure) {
-    LOGD("connecting to AWS");
+    LOGI("AWS MQTT connect");
     r = aws_mqtt_init(root_ca, cert, key, peep_uuid, 5);
     is_local_measure = (r) ? false : true;
     r = true;
@@ -322,6 +341,7 @@ task_measure(void * arg)
 
   if (r) {
     meas.unix_timestamp = time(NULL);
+    LOGI("current Unix time %d", meas.unix_timestamp);
     if (meas.unix_timestamp < _UNIX_TIMESTAMP_THRESHOLD) {
       LOGE("timestamp is invalid");
       r = false;
@@ -330,7 +350,7 @@ task_measure(void * arg)
 
   if (r) {
     if (meas.unix_timestamp >= _config.end_unix_timestamp) {
-      LOGD("end of measurement time reached");
+      LOGI("reached end of measurement Unix time %d", _config.end_unix_timestamp);
       enum peep_state state = PEEP_STATE_MEASURE_CONFIG;
       memory_set_item(
         MEMORY_ITEM_STATE,
@@ -340,7 +360,7 @@ task_measure(void * arg)
   }
 
   if (r && !is_local_measure) {
-    LOGD("publishing measurement results");
+    LOGI("publishing measurement results over MQTT");
     r = _publish_measurements(
       _buffer,
       _BUFFER_LEN,
@@ -351,7 +371,7 @@ task_measure(void * arg)
   else if (r && is_local_measure) {
     uint32_t total = 0;
 
-    LOGD("storing measurement results");
+    LOGI("storing measurement results in internal flash");
 
     memory_measurement_db_add(&meas);
     total = memory_measurement_db_total();
@@ -359,6 +379,7 @@ task_measure(void * arg)
     LOGI("%d measurements stored", total);
   }
 
+  LOGI("WiFi disconnect");
   wifi_disconnect();
   hal_deep_sleep_timer(_config.measure_interval_sec);
 }

@@ -32,12 +32,12 @@ app_main()
 #if defined (PEEP_TEST_STATE_DEEP_SLEEP)
   hal_deep_sleep_timer(60);
   // will not return from above
-#elif defined(PEEP_TEST_STATE_MEASURE)
+#elif defined(PEEP_TEST_STATE_MEASURE) || defined(PEEP_TEST_STATE_MEASURE_CONFIG)
   (void) len;
   state = PEEP_STATE_MEASURE;
-#elif defined(PEEP_TEST_STATE_MEASURE_CONFIG)
-  (void) len;
-  state = PEEP_STATE_MEASURE_CONFIG;
+  // NOTE: I don't think PEEP_STATE_MEASURE_CONFIG will really be needed. Will
+  // likely remove this in the very near future.
+  // state = PEEP_STATE_MEASURE_CONFIG;
 #elif defined (PEEP_TEST_STATE_BLE_CONFIG)
   (void) len;
   state = PEEP_STATE_BLE_CONFIG;
@@ -71,7 +71,7 @@ app_main()
     xTaskCreate(
       task_measure,
       "measurement task",
-      40960,
+      10240,
       NULL,
       2,
       NULL);

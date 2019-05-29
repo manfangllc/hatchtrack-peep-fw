@@ -21,7 +21,7 @@ extern bool
 aws_mqtt_shadow_disconnect(void);
 
 extern bool
-aws_mqtt_shadow_get(aws_mqtt_shadow_cb cb);
+aws_mqtt_shadow_get(aws_mqtt_shadow_cb cb, uint8_t timeout_sec);
 
 extern bool
 aws_mqtt_shadow_poll(uint32_t poll_ms);

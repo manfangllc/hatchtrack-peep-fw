@@ -22,6 +22,19 @@ app_main()
   bool r = true;
   int32_t len = 0;
 
+#if defined (PEEP_TEST_STATE_DEEP_SLEEP) || \
+    defined(PEEP_TEST_STATE_MEASURE) || \
+    defined(PEEP_TEST_STATE_MEASURE_CONFIG) || \
+    defined (PEEP_TEST_STATE_BLE_CONFIG)
+  {
+    uint32_t n = 10;
+    do {
+      LOGI("Starting in %d...", n--);
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+    } while (n);
+  }
+#endif
+
   nvs_flash_init();
   r = memory_init();
   RESULT_TEST_ERROR_TRACE(r);

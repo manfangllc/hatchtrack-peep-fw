@@ -20,6 +20,9 @@ extern bool
 hal_init_push_button(hal_push_button_cb cb);
 
 extern void
+hal_deinit_push_button(void);
+
+extern void
 hal_deep_sleep_timer(uint32_t sec);
 
 extern void

@@ -238,28 +238,6 @@ _icm20602_init(void)
   return r;
 }
 
-static bool
-_push_button_init(hal_push_button_cb cb)
-{
-  gpio_config_t io_conf;
-  esp_err_t err = ESP_OK;
-
-  rtc_gpio_deinit(_PIN_NUM_BTN);
-
-  //hook isr handler for gpio pins
-  gpio_isr_handler_add(_PIN_NUM_BTN, _push_button_isr, (void*) cb);
-
-  // interrupt of rising edge
-  io_conf.pin_bit_mask = ((uint64_t) 1) << _PIN_NUM_BTN;
-  io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-  io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
-  io_conf.intr_type = GPIO_INTR_NEGEDGE;
-  io_conf.mode = GPIO_MODE_INPUT;
-  err = gpio_config(&io_conf);
-
-  return (ESP_OK == err) ? true : false;
-}
-
 /***** Global Functions *****/
 
 bool
@@ -286,11 +264,29 @@ hal_init(void)
 bool
 hal_init_push_button(hal_push_button_cb cb)
 {
-  bool r = true;
+  gpio_config_t io_conf;
+  esp_err_t err = ESP_OK;
 
-  r = _push_button_init(cb);
+  rtc_gpio_deinit(_PIN_NUM_BTN);
 
-  return r;
+  //hook isr handler for gpio pins
+  gpio_isr_handler_add(_PIN_NUM_BTN, _push_button_isr, (void*) cb);
+
+  // interrupt of rising edge
+  io_conf.pin_bit_mask = ((uint64_t) 1) << _PIN_NUM_BTN;
+  io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+  io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
+  io_conf.intr_type = GPIO_INTR_NEGEDGE;
+  io_conf.mode = GPIO_MODE_INPUT;
+  err = gpio_config(&io_conf);
+
+  return (ESP_OK == err) ? true : false;
+}
+
+void
+hal_deinit_push_button(void)
+{
+  gpio_isr_handler_remove(_PIN_NUM_BTN);
 }
 
 void

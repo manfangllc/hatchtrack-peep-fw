@@ -23,6 +23,8 @@ static const int BUTTON_BIT = BIT1;
 static char * _ssid = NULL;
 static char * _pass = NULL;
 
+static bool _is_button_event = false;
+
 /***** Local Functions *****/
 
 static void
@@ -30,10 +32,13 @@ _push_button_callback(bool is_pressed)
 {
   BaseType_t task_yield = pdFALSE;
 
-  xEventGroupSetBitsFromISR(_sync_event_group, BUTTON_BIT, &task_yield);
+  if (!_is_button_event && is_pressed) {
+    _is_button_event = true;
+    xEventGroupSetBitsFromISR(_sync_event_group, BUTTON_BIT, &task_yield);
 
-  if (task_yield) {
-    portYIELD_FROM_ISR();
+    if (task_yield) {
+      portYIELD_FROM_ISR();
+    }
   }
 }
 
@@ -101,22 +106,22 @@ task_ble_config_wifi_credentials(void * arg)
     bits = xEventGroupWaitBits(
       _sync_event_group,
       SYNC_BIT | BUTTON_BIT,
-      false,
+      true,
       false,
       portMAX_DELAY);
 
     LOGI("got event");
 
     if (bits & SYNC_BIT) {
-      xEventGroupClearBits(_sync_event_group, SYNC_BIT);
       LOGI("ssid = %s", _ssid);
       LOGI("password = %s", _pass);
       _ssid[0] = 0;
       _pass[0] = 0;
     }
     else if (bits & BUTTON_BIT) {
-      xEventGroupClearBits(_sync_event_group, BUTTON_BIT);
       LOGI("push button");
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+      _is_button_event = false;
     }
   }
 #else
@@ -157,7 +162,9 @@ task_ble_config_wifi_credentials(void * arg)
       sizeof(enum peep_state));
   }
   else if (bits & BUTTON_BIT) {
+    // User pressed push button. Go into deep sleep without changing state.
     LOGI("push button");
+    hal_deinit_push_button();
   }
 #endif
 

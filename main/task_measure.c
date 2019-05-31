@@ -22,6 +22,8 @@
 #define _BUFFER_LEN (2048)
 #define _AWS_SHADOW_GET_TIMEOUT_SEC (30)
 #define _UNIX_TIMESTAMP_THRESHOLD (1546300800)
+#define _HATCH_CONFIG_DEFAULT_MEASURE_INTERVAL_SEC (5 * 60)
+#define _HATCH_CONFIG_DEFAULT_END_UNIX_TIMESTAMP (2147483647)
 
 #if defined(PEEP_TEST_STATE_MEASURE) || (PEEP_TEST_STATE_MEASURE_CONFIG)
   // SSID of the WiFi AP connect to.
@@ -251,6 +253,7 @@ task_measure(void * arg)
   char * ssid = _ssid;
   char * pass = _pass;
   bool is_shadow_connected = false;
+  bool is_unix_time_in_range = false;
   bool is_local_measure = false;
   bool r = true;
 
@@ -308,7 +311,7 @@ task_measure(void * arg)
     is_shadow_connected = true;
   }
 
-  while ((r) && (0 == (bits & SYNC_BIT))) {
+  while (r && !is_local_measure && (0 == (bits & SYNC_BIT))) {
     TRACE();
     aws_mqtt_shadow_poll(2500);
     vTaskDelay(100 / portTICK_PERIOD_MS);
@@ -322,8 +325,36 @@ task_measure(void * arg)
   }
 
   if (is_shadow_connected) {
+    memory_set_item(
+      MEMORY_ITEM_HATCH_CONFIG,
+      (uint8_t *) &_config,
+      sizeof(struct hatch_configuration));
+
+    // feed watchdog
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+
     LOGI("AWS MQTT shadow disconnect");
     aws_mqtt_shadow_disconnect();
+  }
+  else {
+    memory_get_item(
+      MEMORY_ITEM_HATCH_CONFIG,
+      (uint8_t *) &_config,
+      sizeof(struct hatch_configuration));
+
+    if (false == IS_HATCH_CONFIG_VALID(_config)) {
+      // Can't get config from AWS nor is there a previous config stored in
+      // flash memory. We'll go to sleep for awhile and then try again in at a
+      // later point and hope for better results.
+      _config.measure_interval_sec = _HATCH_CONFIG_DEFAULT_MEASURE_INTERVAL_SEC;
+      r = false;
+
+      LOGE("failed to load previous hatch configuration");
+      LOGE("retry in %d seconds", _config.measure_interval_sec);
+    }
+    else {
+      LOGI("loaded previous hatch configuration");
+    }
   }
 
   #ifdef PEEP_TEST_STATE_MEASURE_CONFIG
@@ -350,16 +381,23 @@ task_measure(void * arg)
 
   if (r) {
     if (meas.unix_timestamp >= _config.end_unix_timestamp) {
-      LOGI("reached end of measurement Unix time %d", _config.end_unix_timestamp);
+      LOGI("reached end Unix time %d", _config.end_unix_timestamp);
       enum peep_state state = PEEP_STATE_MEASURE_CONFIG;
       memory_set_item(
         MEMORY_ITEM_STATE,
         (uint8_t *) &state,
         sizeof(enum peep_state));
+      // we don't need to report this value
+      is_unix_time_in_range = false;
+    }
+    else {
+      LOGI("have not reached end Unix time %d", _config.end_unix_timestamp);
+      // haven't reached the end, need to push this measurement to the cloud
+      is_unix_time_in_range = true;
     }
   }
 
-  if (r && !is_local_measure) {
+  if (r && !is_local_measure && is_unix_time_in_range) {
     LOGI("publishing measurement results over MQTT");
     r = _publish_measurements(
       _buffer,
@@ -368,14 +406,12 @@ task_measure(void * arg)
       (char *) _uuid_start,
       _config.uuid);
   }
-  else if (r && is_local_measure) {
+  else if (r && is_local_measure && is_unix_time_in_range) {
     uint32_t total = 0;
 
     LOGI("storing measurement results in internal flash");
-
     memory_measurement_db_add(&meas);
     total = memory_measurement_db_total();
-
     LOGI("%d measurements stored", total);
   }
 

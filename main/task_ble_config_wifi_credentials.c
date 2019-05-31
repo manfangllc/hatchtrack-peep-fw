@@ -154,6 +154,16 @@ task_ble_config_wifi_credentials(void * arg)
     // feed watchdog
     vTaskDelay(100);
 
+    struct hatch_configuration config;
+    HATCH_CONFIG_INIT(config);
+    memory_set_item(
+      MEMORY_ITEM_HATCH_CONFIG,
+      (uint8_t *) &config,
+      sizeof(struct hatch_configuration));
+
+    // feed watchdog
+    vTaskDelay(100);
+
     LOGI("saving Peep state");
     enum peep_state state = PEEP_STATE_MEASURE;
     memory_set_item(

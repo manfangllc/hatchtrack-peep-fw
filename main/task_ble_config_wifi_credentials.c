@@ -33,6 +33,12 @@ _push_button_callback(bool is_pressed)
   BaseType_t task_yield = pdFALSE;
 
   if (!_is_button_event && is_pressed) {
+    #if defined(PEEP_TEST_STATE_BLE_CONFIG)
+    // leave the push button initialized
+    #else
+    hal_deinit_push_button();
+    #endif
+
     _is_button_event = true;
     xEventGroupSetBitsFromISR(_sync_event_group, BUTTON_BIT, &task_yield);
 
@@ -100,7 +106,7 @@ task_ble_config_wifi_credentials(void * arg)
     if (!r) LOGE("failed to initialize push button");
   }
 
-#if defined (PEEP_TEST_STATE_BLE_CONFIG)
+#if defined(PEEP_TEST_STATE_BLE_CONFIG)
   while (1) {
     // Wait for BLE config to complete.
     bits = xEventGroupWaitBits(
@@ -165,7 +171,7 @@ task_ble_config_wifi_credentials(void * arg)
     vTaskDelay(100);
 
     LOGI("saving Peep state");
-    enum peep_state state = PEEP_STATE_MEASURE;
+    enum peep_state state = PEEP_STATE_MEASURE_CONFIG;
     memory_set_item(
       MEMORY_ITEM_STATE,
       (uint8_t *) &state,
@@ -174,7 +180,6 @@ task_ble_config_wifi_credentials(void * arg)
   else if (bits & BUTTON_BIT) {
     // User pressed push button. Go into deep sleep without changing state.
     LOGI("push button");
-    hal_deinit_push_button();
   }
 #endif
 

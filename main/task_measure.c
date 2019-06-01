@@ -281,7 +281,6 @@ task_measure(void * arg)
   }
 
   while (r && !is_local_measure && (0 == (bits & SYNC_BIT))) {
-    TRACE();
     aws_mqtt_shadow_poll(2500);
     vTaskDelay(100 / portTICK_PERIOD_MS);
 

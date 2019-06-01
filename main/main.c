@@ -19,6 +19,7 @@ void
 app_main()
 {
   enum peep_state state = PEEP_STATE_UNKNOWN;
+  bool is_state_invalid = false;
   bool r = true;
   int32_t len = 0;
 
@@ -79,6 +80,19 @@ app_main()
     sizeof(enum peep_state));
 
   if (sizeof(enum peep_state) != len) {
+    LOGI("no valid state");
+    is_state_invalid = true;
+  }
+  else if ((PEEP_STATE_MEASURE_CONFIG == state) &&
+           (true == hal_deep_sleep_is_wakeup_push_button())) {
+    LOGI("previously hatch measure config, user pressed push button");
+    // technically valid, but we'll abuse this case to reset the Peep back to
+    // the BLE configuration state
+    is_state_invalid = true;
+  }
+
+  if (is_state_invalid) {
+    LOGI("set state BLE configuration");
     state = PEEP_STATE_BLE_CONFIG;
     memory_set_item(
       MEMORY_ITEM_STATE,

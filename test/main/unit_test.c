@@ -109,6 +109,12 @@ app_main(void)
   // their own ISRs for the pins they use for user input.
   gpio_install_isr_service(ESP_INTR_FLAG_LEVEL1);
 
+  uint32_t n = 10;
+  do {
+    printf("Starting test in %d...\n", n--);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+  } while (n);
+
   _init_uart();
 
   UNITY_BEGIN();

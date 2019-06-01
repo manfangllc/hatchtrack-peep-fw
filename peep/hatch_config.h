@@ -13,6 +13,19 @@
 // note: need one byte for '\0', other three are for word alignment
 #define UUID_BUF_LEN (UUID_STR_LEN + 4)
 
+/***** Macros *****/
+
+#define HATCH_CONFIG_INIT(config) \
+  do { \
+    (config).uuid[0] = 0; \
+    (config).end_unix_timestamp = 0; \
+    (config).measure_interval_sec = 0; \
+    (config).temperature_offset_celsius = 0; \
+  } while (0)
+
+#define IS_HATCH_CONFIG_VALID(config) \
+  (0 == (config).uuid[0]) ? false : true
+
 /***** Structs *****/
 
 struct hatch_configuration {

@@ -11,6 +11,7 @@
 #include "esp_gatts_api.h"
 #include "esp_gatt_common_api.h"
 #include "esp_log.h"
+#include "system.h"
 
 /***** Defines *****/
 
@@ -154,22 +155,21 @@ gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t * param)
 
   case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:
     if (param->adv_start_cmpl.status != ESP_BT_STATUS_SUCCESS) {
-      ESP_LOGE(__func__, "Advertising start failed\n");
+      LOGE("Advertising start failed");
     }
     break;
 
   case ESP_GAP_BLE_ADV_STOP_COMPLETE_EVT:
     if (param->adv_stop_cmpl.status != ESP_BT_STATUS_SUCCESS) {
-      ESP_LOGE(__func__, "Advertising stop failed\n");
+      LOGE("Advertising stop failed");
     }
     else {
-      ESP_LOGI(__func__, "Stop adv successfully\n");
+      LOGI("Stop adv successfully");
     }
     break;
 
   case ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT:
-    ESP_LOGI(
-      __func__,
+    LOGI(
       "update connetion params status = %d, min_int = %d, "
       "max_int = %d,conn_int = %d,latency = %d, timeout = %d",
       param->update_conn_params.status,
@@ -194,9 +194,8 @@ gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if,
 
   switch (event) {
   case ESP_GATTS_REG_EVT:
-    ESP_LOGI(
-      __func__,
-      "ESP_GATTS_REG_EVT, status %d, app_id %d\n",
+    LOGI(
+      "ESP_GATTS_REG_EVT, status %d, app_id %d",
       param->reg.status,
       param->reg.app_id);
 
@@ -207,20 +206,20 @@ gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if,
 
     err = esp_ble_gap_set_device_name(_device_name);
     if (ESP_OK != err) {
-      ESP_LOGE(__func__, "%s:%d (%d)", __FILE__, __LINE__, err);
+      LOGE("%s:%d (%d)", __FILE__, __LINE__, err);
     }
 
     // config adv data
     err = esp_ble_gap_config_adv_data(&adv_data);
     if (ESP_OK != err) {
-      ESP_LOGE(__func__, "%s:%d (%d)", __FILE__, __LINE__, err);
+      LOGE("%s:%d (%d)", __FILE__, __LINE__, err);
     }
 
     adv_config_done |= FLAG_ADV_CONFIG;
     // config scan response data
     err = esp_ble_gap_config_adv_data(&scan_rsp_data);
     if (err) {
-      ESP_LOGE(__func__, "%s:%d (%d)", __FILE__, __LINE__, err);
+      LOGE("%s:%d (%d)", __FILE__, __LINE__, err);
     }
     adv_config_done |= FLAG_SCAN_RSP_CONFIG;
 
@@ -229,16 +228,15 @@ gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if,
       &_profile.service_id,
       _service_num_handles);
     if (err) {
-      ESP_LOGE(__func__, "%s:%d (%d)", __FILE__, __LINE__, err);
+      LOGE("%s:%d (%d)", __FILE__, __LINE__, err);
     }
     break;
 
   case ESP_GATTS_CREATE_EVT: {
     esp_attr_control_t control = { .auto_rsp = ESP_GATT_RSP_BY_APP };
 
-    ESP_LOGI(
-      __func__,
-      "ESP_GATTS_CREATE_EVT, status %d,  service_handle %d\n",
+    LOGI(
+      "ESP_GATTS_CREATE_EVT, status %d,  service_handle %d",
       param->create.status,
       param->create.service_handle);
 
@@ -256,15 +254,14 @@ gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if,
       NULL,
       &control);
     if (err) {
-      ESP_LOGE(__func__, "add char failed, error code =%x", err);
+      LOGE("add char failed, error code =%x", err);
     }
     break;
   }
 
   case ESP_GATTS_READ_EVT:
-    ESP_LOGI(
-      __func__,
-      "ESP_GATTS_READ_EVT, conn_id %d, trans_id %d, handle %d\n",
+    LOGI(
+      "ESP_GATTS_READ_EVT, conn_id %d, trans_id %d, handle %d",
       param->read.conn_id,
       param->read.trans_id,
       param->read.handle);
@@ -302,9 +299,8 @@ gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if,
     break;
 
   case ESP_GATTS_WRITE_EVT:
-    ESP_LOGI(
-      __func__,
-      "ESP_GATTS_WRITE_EVT, conn_id %d, handle %d\n",
+    LOGI(
+      "ESP_GATTS_WRITE_EVT, conn_id %d, handle %d",
       param->write.conn_id,
       param->write.handle);
 
@@ -367,7 +363,7 @@ gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if,
     break;
 
   case ESP_GATTS_EXEC_WRITE_EVT:
-    ESP_LOGI(__func__,"ESP_GATTS_EXEC_WRITE_EVT");
+    LOGI("ESP_GATTS_EXEC_WRITE_EVT");
     esp_ble_gatts_send_response(
       gatts_if,
       param->write.conn_id,
@@ -386,7 +382,7 @@ gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if,
     break;
 
   case ESP_GATTS_MTU_EVT:
-    ESP_LOGI(__func__, "ESP_GATTS_MTU_EVT, MTU %d", param->mtu.mtu);
+    LOGI("ESP_GATTS_MTU_EVT, MTU %d", param->mtu.mtu);
     break;
 
   case ESP_GATTS_UNREG_EVT:
@@ -398,9 +394,8 @@ gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if,
   case ESP_GATTS_ADD_CHAR_EVT: {
     esp_attr_control_t control = { .auto_rsp = ESP_GATT_RSP_BY_APP };
 
-    ESP_LOGI(
-      __func__,
-      "ESP_GATTS_ADD_CHAR_EVT, status %d, attr_handle %d, service_handle %d\n",
+    LOGI(
+      "ESP_GATTS_ADD_CHAR_EVT, status %d, attr_handle %d, service_handle %d",
       param->add_char.status,
       param->add_char.attr_handle,
       param->add_char.service_handle);
@@ -416,17 +411,16 @@ gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if,
       NULL,
       &control);
     if (err) {
-      ESP_LOGE(__func__, "add char descr failed, error code =%x", err);
+      LOGE("add char descr failed, error code =%x", err);
     }
     break;
   }
 
   case ESP_GATTS_ADD_CHAR_DESCR_EVT:
     _profile.descr_handle = param->add_char_descr.attr_handle;
-    ESP_LOGI(
-      __func__,
+    LOGI(
       "ESP_GATTS_ADD_CHAR_DESCR_EVT, status %d, attr_handle %d, "
-      "service_handle %d\n",
+      "service_handle %d",
       param->add_char_descr.status,
       param->add_char_descr.attr_handle,
       param->add_char_descr.service_handle);
@@ -436,9 +430,8 @@ gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if,
     break;
 
   case ESP_GATTS_START_EVT:
-    ESP_LOGI(
-      __func__,
-      "ESP_GATTS_START_EVT, status %d, service_handle %d\n",
+    LOGI(
+      "ESP_GATTS_START_EVT, status %d, service_handle %d",
       param->start.status,
       param->start.service_handle);
     break;
@@ -456,8 +449,7 @@ gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if,
     conn_params.min_int = 0x10;    // min_int = 0x10*1.25ms = 20ms
     conn_params.timeout = 400;    // timeout = 400*10ms = 4000ms
 
-    ESP_LOGI(
-      __func__,
+    LOGI(
       "ESP_GATTS_CONNECT_EVT, conn_id %d, "
       "remote %02x:%02x:%02x:%02x:%02x:%02x:",
       param->connect.conn_id,
@@ -476,12 +468,12 @@ gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if,
   }
 
   case ESP_GATTS_DISCONNECT_EVT:
-    ESP_LOGI(__func__, "ESP_GATTS_DISCONNECT_EVT");
+    LOGI("ESP_GATTS_DISCONNECT_EVT");
     esp_ble_gap_start_advertising(&adv_params);
     break;
 
   case ESP_GATTS_CONF_EVT:
-    ESP_LOGI(__func__, "ESP_GATTS_CONF_EVT, status %d", param->conf.status);
+    LOGI("ESP_GATTS_CONF_EVT, status %d", param->conf.status);
     
     if (param->conf.status != ESP_GATT_OK) {
       esp_log_buffer_hex(__func__, param->conf.value, param->conf.len);
@@ -509,9 +501,8 @@ gatts_callback(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if,
       _profile.gatts_if = gatts_if;
     }
     else {
-      ESP_LOGE(
-        __func__,
-        "Reg app failed, app_id %04x, status %d\n",
+      LOGE(
+        "Reg app failed, app_id %04x, status %d",
         param->reg.app_id,
         param->reg.status);
       return;
@@ -555,49 +546,49 @@ ble_init(void)
 
     err = esp_bt_controller_init(&bt_cfg);
     if (err) {
-      printf("%s:%d\n", __func__, __LINE__);
+      LOGE("%d", __LINE__);
       return false;
     }
 
     err = esp_bt_controller_enable(ESP_BT_MODE_BLE);
     if (err) {
-      printf("%s:%d\n", __func__, __LINE__);
+      LOGE("%d", __LINE__);
       return false;
     }
 
     err = esp_bluedroid_init();
     if (err) {
-      printf("%s:%d\n", __func__, __LINE__);
+      LOGE("%d", __LINE__);
       return false;
     }
 
     err = esp_bluedroid_enable();
     if (err) {
-      printf("%s:%d\n", __func__, __LINE__);
+      LOGE("%d", __LINE__);
       return false;
     }
 
     err = esp_ble_gatts_register_callback(gatts_callback);
     if (err) {
-      printf("%s:%d\n", __func__, __LINE__);
+      LOGE("%d", __LINE__);
       return false;
     }
 
     err = esp_ble_gap_register_callback(gap_event_handler);
     if (err) {
-      printf("%s:%d\n", __func__, __LINE__);
+      LOGE("%d", __LINE__);
       return false;
     }
 
     err = esp_ble_gatts_app_register(_profile.app_id);
     if (err) {
-      printf("%s:%d\n", __func__, __LINE__);
+      LOGE("%d", __LINE__);
       return false;
     }
 
     err = esp_ble_gatt_set_local_mtu(500);
     if (err) {
-      printf("%s:%d\n", __func__, __LINE__);
+      LOGE("%d", __LINE__);
       return false;
     }
   }

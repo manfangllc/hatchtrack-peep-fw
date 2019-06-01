@@ -1,5 +1,6 @@
 /***** Includes *****/
 
+#include "hal.h"
 #include "system.h"
 #include "bme680.h"
 #include "icm20602.h"
@@ -24,7 +25,6 @@ static struct bme680_dev _bme680;
 static struct icm20602_dev _icm20602;
 static i2c_port_t _i2c = I2C_NUM_0;
 static SemaphoreHandle_t _lock = NULL;
-static QueueHandle_t _push_button_queue;
 
 static const ledc_mode_t _speed_mode = LEDC_HIGH_SPEED_MODE;
 static const ledc_channel_t _channel = LEDC_CHANNEL_0;
@@ -34,14 +34,10 @@ static const ledc_channel_t _channel = LEDC_CHANNEL_0;
 static void IRAM_ATTR
 _push_button_isr(void * arg)
 {
-  BaseType_t xTaskWoke = pdFALSE;
+  hal_push_button_cb cb = (hal_push_button_cb) arg;
   bool is_pressed = (0 == gpio_get_level(_PIN_NUM_BTN)) ? true : false;
 
-  xQueueSendFromISR(_push_button_queue, &is_pressed, &xTaskWoke);
-
-  if (pdTRUE == xTaskWoke) {
-    portYIELD_FROM_ISR();
-  }
+  cb(is_pressed);
 }
 
 int8_t
@@ -242,30 +238,6 @@ _icm20602_init(void)
   return r;
 }
 
-static bool
-_push_button_init(void)
-{
-  gpio_config_t io_conf;
-  esp_err_t err = ESP_OK;
-
-  rtc_gpio_deinit(_PIN_NUM_BTN);
-
-  _push_button_queue = xQueueCreate(4, sizeof(bool));
-
-  //hook isr handler for gpio pins
-  gpio_isr_handler_add(_PIN_NUM_BTN, _push_button_isr, (void*) _PIN_NUM_BTN);
-
-  // interrupt of rising edge
-  io_conf.pin_bit_mask = ((uint64_t) 1) << _PIN_NUM_BTN;
-  io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-  io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
-  io_conf.intr_type = GPIO_INTR_NEGEDGE;
-  io_conf.mode = GPIO_MODE_INPUT;
-  err = gpio_config(&io_conf);
-
-  return (ESP_OK == err) ? true : false;
-}
-
 /***** Global Functions *****/
 
 bool
@@ -289,6 +261,34 @@ hal_init(void)
   return r;
 }
 
+bool
+hal_init_push_button(hal_push_button_cb cb)
+{
+  gpio_config_t io_conf;
+  esp_err_t err = ESP_OK;
+
+  rtc_gpio_deinit(_PIN_NUM_BTN);
+
+  //hook isr handler for gpio pins
+  gpio_isr_handler_add(_PIN_NUM_BTN, _push_button_isr, (void*) cb);
+
+  // interrupt of rising edge
+  io_conf.pin_bit_mask = ((uint64_t) 1) << _PIN_NUM_BTN;
+  io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+  io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
+  io_conf.intr_type = GPIO_INTR_NEGEDGE;
+  io_conf.mode = GPIO_MODE_INPUT;
+  err = gpio_config(&io_conf);
+
+  return (ESP_OK == err) ? true : false;
+}
+
+void
+hal_deinit_push_button(void)
+{
+  gpio_isr_handler_remove(_PIN_NUM_BTN);
+}
+
 void
 hal_deep_sleep_timer(uint32_t sec)
 {
@@ -297,7 +297,7 @@ hal_deep_sleep_timer(uint32_t sec)
 
   _bme680_sleep();
 
-  LOGI("entering %d second deep sleep\n", sec);
+  LOGI("entering %d second deep sleep", sec);
 
   r = esp_sleep_enable_timer_wakeup(wakeup_time_usec);
   RESULT_TEST((ESP_OK == r), "failed to set wakeup timer");
@@ -311,7 +311,9 @@ hal_deep_sleep_push_button(void)
 {
   esp_err_t r = ESP_OK;
 
-  LOGI("entering deep sleep with push button wakeup\n");
+  _bme680_sleep();
+
+  LOGI("entering deep sleep with push button wakeup");
 
   rtc_gpio_init(_PIN_NUM_BTN);
   r = esp_sleep_enable_ext0_wakeup(_PIN_NUM_BTN, 0);
@@ -319,6 +321,43 @@ hal_deep_sleep_push_button(void)
 
   // Will not return from the above function.
   esp_deep_sleep_start();
+}
+
+void
+hal_deep_sleep_timer_and_push_button(uint32_t sec)
+{
+  esp_err_t r = ESP_OK;
+  uint64_t wakeup_time_usec = sec * 1000000;
+
+  _bme680_sleep();
+
+  LOGI("entering %d second deep sleep with push button wakeup", sec);
+
+  r = esp_sleep_enable_timer_wakeup(wakeup_time_usec);
+  RESULT_TEST((ESP_OK == r), "failed to set wakeup timer");
+
+  rtc_gpio_init(_PIN_NUM_BTN);
+  r = esp_sleep_enable_ext0_wakeup(_PIN_NUM_BTN, 0);
+  RESULT_TEST((ESP_OK == r), "failed to set ext0 wakeup pin %d", _PIN_NUM_BTN);
+
+  // Will not return from the above function.
+  esp_deep_sleep_start();
+}
+
+bool
+hal_deep_sleep_is_wakeup_push_button(void)
+{
+  return (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT0) ?
+    true :
+    false;
+}
+
+bool
+hal_deep_sleep_is_wakeup_timer(void)
+{
+  return (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) ?
+    true :
+    false;
 }
 
 bool
@@ -419,6 +458,14 @@ hal_read_accel_gyro(float * p_ax, float * p_ay, float * p_az, float * p_gx,
 /***** Unit Tests *****/
 
 #ifdef PEEP_UNIT_TEST_BUILD
+static volatile bool _is_pressed = false;
+
+static void
+_test_push_button(bool is_pressed)
+{
+  _is_pressed = is_pressed;
+}
+
 TEST_CASE("HAL BME680", "[hal.c]")
 {
   bool r = true;
@@ -432,10 +479,10 @@ TEST_CASE("HAL BME680", "[hal.c]")
   TEST_ASSERT(r);
 
   printf("* Performing measurement...\n");
-  float t, h;
-  r = hal_read_temperature_humdity(&t, &h);
+  float t, h, p, g;
+  r = hal_read_temperature_humdity_pressure_resistance(&t, &h, &p, &g);
   TEST_ASSERT(r);
-  printf("\tT=%f, H=%f\n", t, h);
+  printf("\tT=%f, H=%f P=%f G=%f\n", t, h, p, g);
 
   printf("* Free I2C interface.\n");
   r = _i2c_master_free();
@@ -472,15 +519,16 @@ TEST_CASE("HAL ICM20602", "[hal.c]")
 TEST_CASE("HAL push button", "[hal.c]")
 {
   BaseType_t status = pdTRUE;
-  bool is_pressed = false;
   bool r = true;
 
   printf("* Initializing push button interface.\n");
-  r = _push_button_init();
+  r = hal_init_push_button(_test_push_button);
   TEST_ASSERT(r);
 
   printf("* Please engage the push button.\n");
-  status = xQueueReceive(_push_button_queue, &is_pressed, portMAX_DELAY);
+  while (false == _is_pressed) {
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+  }
   TEST_ASSERT(pdTRUE == status);
 }
 #endif

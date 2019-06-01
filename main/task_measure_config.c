@@ -43,8 +43,32 @@ static char * _pass = NULL;
 
 static EventGroupHandle_t _sync_event_group = NULL;
 static const int SYNC_BIT = BIT0;
+static const int BUTTON_BIT = BIT1;
+
+static bool _is_button_event = false;
 
 /***** Local Functions *****/
+
+static void
+_push_button_callback(bool is_pressed)
+{
+  BaseType_t task_yield = pdFALSE;
+
+  if (!_is_button_event && is_pressed) {
+    #if defined(PEEP_TEST_STATE_MEASURE_CONFIG)
+    // leave the push button initialized
+    #else
+    hal_deinit_push_button();
+    #endif
+
+    _is_button_event = true;
+    xEventGroupSetBitsFromISR(_sync_event_group, BUTTON_BIT, &task_yield);
+
+    if (task_yield) {
+      portYIELD_FROM_ISR();
+    }
+  }
+}
 
 static bool
 _get_wifi_ssid_pasword(char * ssid, char * password)
@@ -120,6 +144,10 @@ task_measure_config(void * arg)
 
   LOGI("start");
 
+  // Install gpio isr service. We do this here because the subsystems register
+  // their own ISRs for the pins they use for user input.
+  gpio_install_isr_service(ESP_INTR_FLAG_LEVEL1);
+
   _sync_event_group = xEventGroupCreate();
   _buffer = malloc(_BUFFER_LEN);
   _ssid = malloc(WIFI_SSID_LEN_MAX);
@@ -133,62 +161,86 @@ task_measure_config(void * arg)
   memset(&_config, 0, sizeof(struct hatch_configuration));
 
   if (r) {
-    TRACE();
     r = _get_wifi_ssid_pasword(ssid, pass);
   }
 
   if (r) {
-    TRACE();
+    LOGI("initialize push button");
+    r = hal_init_push_button(_push_button_callback);
+    if (!r) LOGE("failed to initialize push button");
+  }
+
+  if (r && (false == _is_button_event)) {
+    LOGI("WiFi connect to SSID %s", ssid);
     r = wifi_connect(ssid, pass, 60);
   }
 
-  if (r) {
-    TRACE();
+  if (r && (false == _is_button_event)) {
+    LOGI("AWS MQTT shadow connect");
     r = aws_mqtt_shadow_init(root_ca, cert, key, peep_uuid, 60);
   }
 
-  if (r) {
-    TRACE();
+  if (r && (false == _is_button_event)) {
+    LOGI("AWS MQTT shadow get timeout %d seconds", _AWS_SHADOW_GET_TIMEOUT_SEC);
     r = aws_mqtt_shadow_get(_shadow_callback, _AWS_SHADOW_GET_TIMEOUT_SEC);
   }
 
-  while ((r) && (0 == (bits & SYNC_BIT))) {
-    TRACE();
-    aws_mqtt_shadow_poll(1000);
-    vTaskDelay(100 / portTICK_PERIOD_MS);
-
+  while ((r) && (0 == (bits & SYNC_BIT)) && (0 == (bits & BUTTON_BIT))) {
     bits = xEventGroupWaitBits(
       _sync_event_group,
-      SYNC_BIT,
-      false,
+      SYNC_BIT | BUTTON_BIT,
       true,
-      0);
+      false,
+      100 / portTICK_PERIOD_MS);
+
+    if ((0 == (bits & SYNC_BIT)) && (0 == (bits & BUTTON_BIT))) {
+      aws_mqtt_shadow_poll(2500);
+    }
   }
 
   wifi_disconnect();
 
 #if defined(PEEP_TEST_STATE_MEASURE_CONFIG)
-  LOGI("uuid=%s", _config.uuid);
-  LOGI("end_unix_timestamp=%d", _config.end_unix_timestamp);
-  LOGI("measure_interval_sec=%d", _config.measure_interval_sec);
-  LOGI("temperature_offset_celsius=%d", _config.temperature_offset_celsius);
-
+  if (bits & BUTTON_BIT) {
+      LOGI("push button");
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+      _is_button_event = false;
+  }
+  if (bits & SYNC_BIT) {
+    LOGI("uuid=%s", _config.uuid);
+    LOGI("end_unix_timestamp=%d", _config.end_unix_timestamp);
+    LOGI("measure_interval_sec=%d", _config.measure_interval_sec);
+    LOGI("temperature_offset_celsius=%d", _config.temperature_offset_celsius);
+  }
   hal_deep_sleep_timer(30);
 #else
-  memory_set_item(
-    MEMORY_ITEM_HATCH_CONFIG,
-    (uint8_t *) &_config,
-    sizeof(struct hatch_configuration));
+  if (bits & BUTTON_BIT) {
+    LOGI("user pressed push button");
+    enum peep_state state = PEEP_STATE_BLE_CONFIG;
+    memory_set_item(
+      MEMORY_ITEM_STATE,
+      (uint8_t *) &state,
+      sizeof(enum peep_state));
 
-  // feed watchdog
-  vTaskDelay(10);
+    hal_deep_sleep_timer(0);
+  }
+  else if (bits & SYNC_BIT) {
+    LOGI("got AWS MQTT shadow");
+    memory_set_item(
+      MEMORY_ITEM_HATCH_CONFIG,
+      (uint8_t *) &_config,
+      sizeof(struct hatch_configuration));
 
-  enum peep_state state = PEEP_STATE_MEASURE;
-  memory_set_item(
-    MEMORY_ITEM_STATE,
-    (uint8_t *) &state,
-    sizeof(enum peep_state));
+    // feed watchdog
+    vTaskDelay(100);
 
-  hal_deep_sleep_push_button();
+    enum peep_state state = PEEP_STATE_MEASURE;
+    memory_set_item(
+      MEMORY_ITEM_STATE,
+      (uint8_t *) &state,
+      sizeof(enum peep_state));
+
+    hal_deep_sleep_timer(60);
+  }
 #endif
 }

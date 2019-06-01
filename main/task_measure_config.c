@@ -181,7 +181,7 @@ task_measure_config(void * arg)
     sizeof(struct hatch_configuration));
 
   // feed watchdog
-  vTaskDelay(10);
+  vTaskDelay(100);
 
   enum peep_state state = PEEP_STATE_MEASURE;
   memory_set_item(
@@ -189,6 +189,6 @@ task_measure_config(void * arg)
     (uint8_t *) &state,
     sizeof(enum peep_state));
 
-  hal_deep_sleep_push_button();
+  hal_deep_sleep_timer(60);
 #endif
 }

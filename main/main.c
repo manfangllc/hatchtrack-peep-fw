@@ -43,18 +43,36 @@ app_main()
   RESULT_TEST_ERROR_TRACE(r);
 
 #if defined (PEEP_TEST_STATE_DEEP_SLEEP)
-  hal_deep_sleep_timer(60);
+
+  if (hal_deep_sleep_is_wakeup_push_button()) {
+    LOGI("wakeup cause push button");
+  }
+  else if (hal_deep_sleep_is_wakeup_timer()) {
+    LOGI("wakeup cause timer");
+  }
+  else {
+    LOGI("unknown wakeup cause");
+  }
+  hal_deep_sleep_timer_and_push_button(60);
   // will not return from above
-#elif defined(PEEP_TEST_STATE_MEASURE) || defined(PEEP_TEST_STATE_MEASURE_CONFIG)
+
+#elif defined(PEEP_TEST_STATE_MEASURE)
+
   (void) len;
   state = PEEP_STATE_MEASURE;
-  // NOTE: I don't think PEEP_STATE_MEASURE_CONFIG will really be needed. Will
-  // likely remove this in the very near future.
-  // state = PEEP_STATE_MEASURE_CONFIG;
+
+#elif defined(PEEP_TEST_STATE_MEASURE_CONFIG)
+
+  (void) len;
+  state = PEEP_STATE_MEASURE_CONFIG;
+
 #elif defined (PEEP_TEST_STATE_BLE_CONFIG)
+
   (void) len;
   state = PEEP_STATE_BLE_CONFIG;
+
 #else
+
   len = memory_get_item(
     MEMORY_ITEM_STATE,
     (uint8_t * ) &state,
@@ -67,6 +85,7 @@ app_main()
       (uint8_t *) &state,
       sizeof(enum peep_state));
   }
+
 #endif
 
   if (PEEP_STATE_BLE_CONFIG == state) {

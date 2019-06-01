@@ -188,37 +188,6 @@ _get_wifi_ssid_pasword(char * ssid, char * password)
   return r;
 }
 
-// TODO: Remove?
-/*
-static bool
-_get_hatch_config(struct hatch_configuration * config)
-{
-  int len = 0;
-  bool r = true;
-#ifdef PEEP_TEST_STATE_MEASURE
-  (void) len;
-  strcpy(config->uuid, _TEST_HATCH_CONFIG_UUID);
-  config->end_unix_timestamp = _TEST_HATCH_CONFIG_END_UNIX_TIMESTAMP;
-  config->measure_interval_sec = _TEST_HATCH_CONFIG_MEASURE_INTERVAL_SEC;
-#else
-  if (r) {
-    len = memory_get_item(
-      MEMORY_ITEM_HATCH_CONFIG,
-      (uint8_t *) config,
-      sizeof(struct hatch_configuration));
-    if (len <= 0) {
-      r = false;
-    }
-    else {
-      LOGI("hatch UUID = %s", config->uuid);
-    }
-  }
-#endif
-
-  return r;
-}
-*/
-
 static void
 _shadow_callback(uint8_t * buf, uint16_t buf_len)
 {
@@ -356,12 +325,6 @@ task_measure(void * arg)
       LOGI("loaded previous hatch configuration");
     }
   }
-
-  #ifdef PEEP_TEST_STATE_MEASURE_CONFIG
-  LOGI("WiFi disconnect");
-  wifi_disconnect();
-  hal_deep_sleep_timer(60);
-  #endif
 
   if (r && !is_local_measure) {
     LOGI("AWS MQTT connect");

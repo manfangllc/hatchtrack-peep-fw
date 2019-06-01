@@ -29,6 +29,15 @@ extern void
 hal_deep_sleep_push_button(void);
 
 extern bool
+hal_deep_sleep_is_wakeup_push_button(void);
+
+extern bool
+hal_deep_sleep_is_wakeup_timer(void);
+
+extern void
+hal_deep_sleep_timer_and_push_button(uint32_t sec);
+
+extern bool
 hal_read_temperature_humdity_pressure_resistance(float * p_temperature,
   float * p_humidity, float * p_pressure, float * p_gas_resistance);
 

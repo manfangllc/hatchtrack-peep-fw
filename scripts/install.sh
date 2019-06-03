@@ -31,6 +31,7 @@ echo "press 'enter' at prompt to accept default"
 read -p "serial port [$PORT]:" input
 echo "========================"
 
+python esptool.py --chip esp32 --port $PORT --baud 115200 erase_flash
 python esptool.py --chip esp32 --port $PORT --baud 115200 \
 --before "default_reset" --after "hard_reset" \
 write_flash -z --flash_mode "dio" --flash_freq "40m" --flash_size detect \

@@ -215,14 +215,14 @@ task_measure_config(void * arg)
   hal_deep_sleep_timer(30);
 #else
   if (bits & BUTTON_BIT) {
-    LOGI("user pressed push button");
-    enum peep_state state = PEEP_STATE_BLE_CONFIG;
-    memory_set_item(
-      MEMORY_ITEM_STATE,
-      (uint8_t *) &state,
-      sizeof(enum peep_state));
+    //LOGI("user pressed push button");
+    //enum peep_state state = PEEP_STATE_BLE_CONFIG;
+    //memory_set_item(
+      //MEMORY_ITEM_STATE,
+      //(uint8_t *) &state,
+      //sizeof(enum peep_state));
 
-    hal_deep_sleep_timer(0);
+    //hal_deep_sleep_timer(0);
   }
   else if (bits & SYNC_BIT) {
     LOGI("got AWS MQTT shadow");
@@ -239,8 +239,8 @@ task_measure_config(void * arg)
       MEMORY_ITEM_STATE,
       (uint8_t *) &state,
       sizeof(enum peep_state));
-
-    hal_deep_sleep_timer_and_push_button(60);
   }
+
+  hal_deep_sleep_timer_and_push_button(60);
 #endif
 }

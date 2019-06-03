@@ -146,7 +146,7 @@ task_measure_config(void * arg)
 
   // Install gpio isr service. We do this here because the subsystems register
   // their own ISRs for the pins they use for user input.
-  gpio_install_isr_service(ESP_INTR_FLAG_LEVEL1);
+  //gpio_install_isr_service(ESP_INTR_FLAG_LEVEL1);
 
   _sync_event_group = xEventGroupCreate();
   _buffer = malloc(_BUFFER_LEN);
@@ -164,11 +164,11 @@ task_measure_config(void * arg)
     r = _get_wifi_ssid_pasword(ssid, pass);
   }
 
-  if (r) {
-    LOGI("initialize push button");
-    r = hal_init_push_button(_push_button_callback);
-    if (!r) LOGE("failed to initialize push button");
-  }
+  //if (r) {
+    //LOGI("initialize push button");
+    //r = hal_init_push_button(_push_button_callback);
+    //if (!r) LOGE("failed to initialize push button");
+  //}
 
   if (r && (false == _is_button_event)) {
     LOGI("WiFi connect to SSID %s", ssid);
@@ -240,7 +240,7 @@ task_measure_config(void * arg)
       (uint8_t *) &state,
       sizeof(enum peep_state));
 
-    hal_deep_sleep_timer(60);
+    hal_deep_sleep_timer_and_push_button(60);
   }
 #endif
 }

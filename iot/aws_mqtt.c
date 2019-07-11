@@ -130,6 +130,8 @@ aws_mqtt_publish(char * topic, char * message, bool retain)
   // NOT SUPPORTED BY AWS!
   (void) retain;
 
+  //TODO should this be Q0S1 so we this function only returns success
+  //on receipt of control callback.
   publish_params.qos = QOS0;
   publish_params.isRetained = 0;
   publish_params.payload = (void *) message;

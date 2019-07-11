@@ -299,6 +299,11 @@ hal_deep_sleep_timer(uint32_t sec)
 
   LOGI("entering %d second deep sleep", sec);
 
+  // experimental configuration with disabling RTC memory which is
+  // not needed for current use cases.
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_OFF);
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);
+
   r = esp_sleep_enable_timer_wakeup(wakeup_time_usec);
   RESULT_TEST((ESP_OK == r), "failed to set wakeup timer");
 
@@ -314,6 +319,11 @@ hal_deep_sleep_push_button(void)
   _bme680_sleep();
 
   LOGI("entering deep sleep with push button wakeup");
+
+  // experimental configuration with disabling RTC memory which is
+  // not needed for current use cases.
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_OFF);
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);
 
   rtc_gpio_init(_PIN_NUM_BTN);
   r = esp_sleep_enable_ext0_wakeup(_PIN_NUM_BTN, 0);
@@ -332,6 +342,11 @@ hal_deep_sleep_timer_and_push_button(uint32_t sec)
   _bme680_sleep();
 
   LOGI("entering %d second deep sleep with push button wakeup", sec);
+
+  // experimental configuration with disabling RTC memory which is
+  // not needed for current use cases.
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_OFF);
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);
 
   r = esp_sleep_enable_timer_wakeup(wakeup_time_usec);
   RESULT_TEST((ESP_OK == r), "failed to set wakeup timer");
@@ -416,7 +431,7 @@ hal_read_temperature_humdity_pressure_resistance(float * p_temperature,
     humidity = data.humidity / 1000.0;
     pressure = data.pressure;
     gas_resistance = data.gas_resistance;
-    
+
     *p_temperature = temperature;
     *p_humidity = humidity;
     *p_pressure = pressure;

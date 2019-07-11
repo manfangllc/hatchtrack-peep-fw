@@ -212,7 +212,7 @@ task_measure_config(void * arg)
     LOGI("measure_interval_sec=%d", _config.measure_interval_sec);
     LOGI("temperature_offset_celsius=%d", _config.temperature_offset_celsius);
   }
-  hal_deep_sleep_timer(30);
+  hal_deep_sleep_timer_and_push_button(30);
 #else
   if (bits & BUTTON_BIT) {
     //LOGI("user pressed push button");

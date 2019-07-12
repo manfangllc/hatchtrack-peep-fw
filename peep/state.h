@@ -23,9 +23,6 @@ enum peep_state {
 /***** Global Functions *****/
 
 bool
-peep_state_init(void);
-
-bool
 peep_set_state(enum peep_state state);
 
 bool

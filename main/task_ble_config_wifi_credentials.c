@@ -171,11 +171,8 @@ task_ble_config_wifi_credentials(void * arg)
     vTaskDelay(100);
 
     LOGI("saving Peep state");
-    enum peep_state state = PEEP_STATE_MEASURE_CONFIG;
-    memory_set_item(
-      MEMORY_ITEM_STATE,
-      (uint8_t *) &state,
-      sizeof(enum peep_state));
+
+    peep_set_state(PEEP_STATE_MEASURE_CONFIG);
   }
   else if (bits & BUTTON_BIT) {
     // User pressed push button. Go into deep sleep without changing state.

@@ -234,11 +234,8 @@ task_measure_config(void * arg)
     // feed watchdog
     vTaskDelay(100);
 
-    enum peep_state state = PEEP_STATE_MEASURE;
-    memory_set_item(
-      MEMORY_ITEM_STATE,
-      (uint8_t *) &state,
-      sizeof(enum peep_state));
+    //Set the state to measure
+    peep_set_state(PEEP_STATE_MEASURE);
   }
 
   hal_deep_sleep_timer_and_push_button(60);

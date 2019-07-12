@@ -344,11 +344,9 @@ task_measure(void * arg)
   if (r) {
     if (meas.unix_timestamp >= _config.end_unix_timestamp) {
       LOGI("reached end Unix time %d", _config.end_unix_timestamp);
-      enum peep_state state = PEEP_STATE_MEASURE_CONFIG;
-      memory_set_item(
-        MEMORY_ITEM_STATE,
-        (uint8_t *) &state,
-        sizeof(enum peep_state));
+
+      peep_set_state(PEEP_STATE_MEASURE_CONFIG);
+
       // we don't need to report this value
       is_unix_time_in_range = false;
     }

@@ -19,7 +19,7 @@
    /* Taking measurements ever 15 mins, so 4 every hour and we want to */
    /* publish every 12 hours (unless something else occurs to force us */
    /* to publish early.                                                */
-#define HATCH_CONFIGURATION_DEFAULT_MEASUREMENT_PUBLISH_THRESHOLD      (4 * 12)
+#define HATCH_CONFIGURATION_DEFAULT_MEASUREMENT_PUBLISH_THRESHOLD              (4 * 12)
 
    /* The default measurement interval is seconds (15 minutes).        */
 #define HATCH_CONFIGURATION_DEFAULT_MEASURE_INTERVAL_SEC                       (15 * 60)

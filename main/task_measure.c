@@ -262,6 +262,7 @@ void task_measure(void * arg)
   uint8_t                  *buffer;
   EventBits_t               bits                  = 0;
   uint32_t                  total                 = 0;
+  uint32_t                  MeasurementInterval   = 60;
   struct hatch_measurement  meas;
 
   LOGI("start");
@@ -357,6 +358,14 @@ void task_measure(void * arg)
         /* Time is valid.   so store measurement timestamp.              */
         meas.unix_timestamp = time(NULL);
         LOGI("current Unix time %u", meas.unix_timestamp);
+
+        /* Check to see if we have reach the end of measurement period.  */
+        if(meas.unix_timestamp >= _config.end_unix_timestamp)
+        {
+           /* reached the end of measurement period.  publish what we    */
+           /* have                                                       */
+           publish_measurements = true;
+        }
      }
 
      /* check to see if it is time to publish these measurements.         */
@@ -558,9 +567,13 @@ void task_measure(void * arg)
 
         /* set the configured measurement interval to 1 sec and this will*/
         /* force us to almost immediately enter the measure config state */
-        /* to see if there is an updated measurement configuration.  This*/
-        /* value will just be used locally and not written to flash.     */
-        _config.measure_interval_sec = 1;
+        /* to see if there is an updated measurement configuration.      */
+        MeasurementInterval = 1;
+     }
+     else
+     {
+        /* Use default measurement interval.                             */
+        MeasurementInterval = _config.measure_interval_sec;
      }
 
      //Note, may need a delay here.
@@ -578,7 +591,7 @@ void task_measure(void * arg)
 ERROR:
 
      /* enter deep sleep.                                                */
-     hal_deep_sleep_timer_and_push_button(_config.measure_interval_sec);
+     hal_deep_sleep_timer_and_push_button(MeasurementInterval);
   }
   else
   {

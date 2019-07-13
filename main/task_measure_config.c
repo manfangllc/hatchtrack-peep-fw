@@ -160,6 +160,30 @@ task_measure_config(void * arg)
 
   memset(&_config, 0, sizeof(struct hatch_configuration));
 
+  /* Attempt to read the config from NVM, not all fields updated via AWS.*/
+  memory_get_item(MEMORY_ITEM_HATCH_CONFIG, (uint8_t *) &_config, sizeof(struct hatch_configuration));
+
+  if (IS_HATCH_CONFIG_VALID(_config))
+  {
+     LOGI("loaded previous hatch configuration");
+
+     LOGI("Magic Word                    : 0x%X", _config.magic_word);
+     LOGI("Measurements Interval (s)     : %u",   _config.measure_interval_sec);
+     LOGI("Consecutive Low Readings      : %u",   _config.consecutive_low_readings);
+     LOGI("Consecutive High Readings     : %u",   _config.consecutive_high_readings);
+     LOGI("Measurements since Publishing : %u",   _config.measurements_since_last_published);
+     LOGI("Measurements before Publishing: %u",   _config.measurements_before_publishing);
+  }
+  else
+  {
+    LOGE("failed to load previous hatch configuration");
+
+    /* Load a default value for the config and store to nvm.*/
+    HATCH_CONFIG_INIT(_config);
+
+    memory_set_item(MEMORY_ITEM_HATCH_CONFIG, (uint8_t *) &_config, sizeof(struct hatch_configuration));
+  }
+
   if (r) {
     r = _get_wifi_ssid_pasword(ssid, pass);
   }

@@ -155,10 +155,11 @@ _bme680_init(void)
   bool r = true;
 
   if (r) {
-    _bme680.dev_id = _I2C_ADDR_BME680;
-    _bme680.intf = BME680_I2C_INTF;
-    _bme680.read = &_i2c_read_reg;
-    _bme680.write = &_i2c_write_reg;
+     memset(&_bme680, 0, sizeof(_bme680));
+    _bme680.dev_id   = _I2C_ADDR_BME680;
+    _bme680.intf     = BME680_I2C_INTF;
+    _bme680.read     = &_i2c_read_reg;
+    _bme680.write    = &_i2c_write_reg;
     _bme680.delay_ms = &_sleep;
 
     status = bme680_init(&_bme680);
@@ -169,14 +170,13 @@ _bme680_init(void)
 
   if (r) {
     // These settings stay constant through our application.
-    _bme680.tph_sett.os_temp = BME680_OS_8X;
-    _bme680.tph_sett.os_hum = BME680_OS_2X;
-    _bme680.tph_sett.os_pres = BME680_OS_4X;
-    _bme680.tph_sett.filter = BME680_FILTER_SIZE_3;
+    _bme680.tph_sett.os_temp    = BME680_OS_8X;
+    _bme680.tph_sett.os_hum     = BME680_OS_2X;
+    _bme680.tph_sett.os_pres    = BME680_OS_4X;
+    _bme680.tph_sett.filter     = BME680_FILTER_SIZE_3;
     _bme680.gas_sett.heatr_temp = 320; // 320*C
-    _bme680.gas_sett.heatr_dur = 150; // 150 ms
-    _bme680.gas_sett.run_gas = BME680_ENABLE_GAS_MEAS;
-    _bme680.power_mode = BME680_FORCED_MODE;
+    _bme680.gas_sett.heatr_dur  = 150; // 150 ms
+    _bme680.power_mode          = BME680_FORCED_MODE;
   }
 
   return r;
@@ -379,22 +379,28 @@ bool
 hal_read_temperature_humdity_pressure_resistance(float * p_temperature,
   float * p_humidity, float * p_pressure, float * p_gas_resistance)
 {
+  int      status         = 0;
+  bool     r              = true;
+  float    temperature    = 0;
+  float    humidity       = 0;
+  float    pressure       = 0;
+  float    gas_resistance = 0;
+  uint16_t measure_delay  = 0;
+  uint16_t sensor_settings;
   struct bme680_field_data data;
-  uint16_t measure_delay = 0;
-  int status = 0;
-  bool r = true;
 
-  const uint16_t sensor_settings =
-    BME680_OST_SEL |
-    BME680_OSH_SEL |
-    BME680_OSP_SEL |
-    BME680_FILTER_SEL |
-    BME680_GAS_SENSOR_SEL;
+  /* initialize the data structure.                                      */
+  memset(&data, 0, sizeof(data));
 
-  float temperature = 0;
-  float humidity = 0;
-  float pressure = 0;
-  float gas_resistance = 0;
+  /* Set sensor settings based on some option user input.                */
+  sensor_settings          = BME680_OST_SEL | BME680_OSH_SEL | BME680_OSP_SEL | BME680_FILTER_SEL;
+  _bme680.gas_sett.run_gas = BME680_DISABLE_GAS_MEAS;
+
+  if(p_gas_resistance != NULL)
+  {
+    sensor_settings          |= BME680_GAS_SENSOR_SEL;
+    _bme680.gas_sett.run_gas  = BME680_ENABLE_GAS_MEAS;
+  }
 
   if (r) {
     // don't do anything till we request a reading
@@ -427,15 +433,19 @@ hal_read_temperature_humdity_pressure_resistance(float * p_temperature,
   }
 
   if (r) {
-    temperature = data.temperature / 100.0;
-    humidity = data.humidity / 1000.0;
-    pressure = data.pressure;
+    temperature    = data.temperature / 100.0;
+    humidity       = data.humidity / 1000.0;
+    pressure       = data.pressure;
     gas_resistance = data.gas_resistance;
 
     *p_temperature = temperature;
-    *p_humidity = humidity;
-    *p_pressure = pressure;
-    *p_gas_resistance = gas_resistance;
+    *p_humidity    = humidity;
+    *p_pressure    = pressure;
+
+    if(p_gas_resistance != NULL)
+    {
+       *p_gas_resistance = gas_resistance;
+    }
   }
 
   return r;

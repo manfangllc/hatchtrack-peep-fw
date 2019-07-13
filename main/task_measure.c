@@ -317,7 +317,9 @@ void task_measure(void * arg)
      LOGI("performing measurement : Time : %ld", time(NULL));
 
      /* Take the measurement and print some useful info.*/
-     Result = hal_read_temperature_humdity_pressure_resistance(&(meas.temperature), &(meas.humidity), &(meas.air_pressure), &(meas.gas_resistance));
+     memset(&meas, 0, sizeof(meas));
+
+     Result = hal_read_temperature_humdity_pressure_resistance(&(meas.temperature), &(meas.humidity), &(meas.air_pressure), NULL);
      if(Result)
      {
         LOGI("Temperature (C, F): %f, %f", meas.temperature, ((meas.temperature * ((float)(1.8))) + ((float)32)));

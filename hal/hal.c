@@ -17,7 +17,7 @@
 #define _I2C_ADDR_BME680 (BME680_I2C_ADDR_PRIMARY)
 #define _I2C_ADDR_ICM20602 (0x69)
 
-#define _PIN_NUM_BTN 0
+#define _PIN_NUM_BTN 26
 
 /***** Local Data *****/
 

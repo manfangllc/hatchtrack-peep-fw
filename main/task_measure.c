@@ -550,6 +550,19 @@ void task_measure(void * arg)
      /* Update flash with the config.                                    */
      memory_set_item(MEMORY_ITEM_HATCH_CONFIG, (uint8_t *) &_config, sizeof(struct hatch_configuration));
 
+     /* Check to see if we have reach the end of measurement period.     */
+     if(meas.unix_timestamp >= _config.end_unix_timestamp)
+     {
+        /* Change to the measure config state next.                      */
+        peep_set_state(PEEP_STATE_MEASURE_CONFIG);
+
+        /* set the configured measurement interval to 1 sec and this will*/
+        /* force us to almost immediately enter the measure config state */
+        /* to see if there is an updated measurement configuration.  This*/
+        /* value will just be used locally and not written to flash.     */
+        _config.measure_interval_sec = 1;
+     }
+
      //Note, may need a delay here.
 
      // feed watchdog

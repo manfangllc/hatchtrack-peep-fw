@@ -21,8 +21,13 @@
    /* to publish early.                                                */
 #define HATCH_CONFIGURATION_DEFAULT_MEASUREMENT_PUBLISH_THRESHOLD      (4 * 12)
 
-   /* Some, other left over configs.                                   */
+   /* The default measurement interval is seconds (15 minutes).        */
 #define HATCH_CONFIGURATION_DEFAULT_MEASURE_INTERVAL_SEC                       (15 * 60)
+
+   /* Default end time for measurement state.   Translates to:         */
+   /*                                                                  */
+   /*       GMT: Tuesday, January 19, 2038 3:14:07 AM                  */
+   /*                                                                  */
 #define HATCH_CONFIGURATION_DEFAULT_END_UNIX_TIMESTAMP                         (2147483647)
 
    /* Indicates if the stored hatch configuration is valid or not.     */

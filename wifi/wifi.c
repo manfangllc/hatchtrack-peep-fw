@@ -98,15 +98,18 @@ _init_time(int32_t timeout_sec)
   int retry = 0;
   bool r = true;
 
+  /* Always enable SNTP when connecting to wifi.                        */
+  LOGI("initializing SNTP");
+  sntp_setoperatingmode(SNTP_OPMODE_POLL);
+  sntp_setservername(0, "pool.ntp.org");
+  sntp_init();
+
+  /* Check to see if the time is up to date.                            */
   time(&now);
   localtime_r(&now, &timeinfo);
   // Is time set? If not, tm_year will be (1970 - 1900).
   if (timeinfo.tm_year < (2016 - 1900)) {
     LOGI("time not set, initializing SNTP");
-    sntp_setoperatingmode(SNTP_OPMODE_POLL);
-    sntp_setservername(0, "pool.ntp.org");
-    sntp_init();
-
     // wait for time to be set
     while ((timeinfo.tm_year < (2016 - 1900)) && (++retry < retry_max)) {
       vTaskDelay(poll_ticks);
@@ -117,7 +120,7 @@ _init_time(int32_t timeout_sec)
 
   if (retry < retry_max) {
     LOGI(
-      "%d-%d-%d %d:%d:%d",
+      "Current Date/Time : %d-%d-%d %d:%d:%d",
       timeinfo.tm_year + 1900,
       timeinfo.tm_mon + 1,
       timeinfo.tm_mday,
@@ -171,7 +174,7 @@ wifi_connect(char * ssid, char * password, int32_t timeout_sec)
         false,
         true,
         poll_ticks);
-      
+
       if (0 == (bits & WIFI_CONNECTED_BIT)) {
         timeout_sec -= POLL_SEC;
       }

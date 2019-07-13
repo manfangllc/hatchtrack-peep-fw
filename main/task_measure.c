@@ -55,18 +55,13 @@ extern const uint8_t _uuid_end[]   asm("_binary_uuid_txt_end");
 /***** Local Data *****/
 
 static struct hatch_configuration _config;
-static uint8_t * _buffer = NULL;
-static char * _ssid = NULL;
-static char * _pass = NULL;
 
 static EventGroupHandle_t _sync_event_group = NULL;
 static const int SYNC_BIT = BIT0;
 
 /***** Local Functions *****/
 
-static bool
-_format_json(uint8_t * buf, uint32_t buf_len,
-  struct hatch_measurement * meas, char * peep_uuid, char * hatch_uuid)
+static bool _format_json(uint8_t * buf, uint32_t buf_len, struct hatch_measurement * meas, char * peep_uuid, char * hatch_uuid)
 {
   int32_t bytes = 0;
   bool r = true;
@@ -98,57 +93,53 @@ _format_json(uint8_t * buf, uint32_t buf_len,
   return r;
 }
 
-static bool
-_publish_measurements(uint8_t * buf, uint32_t buf_len,
-  struct hatch_measurement * meas, char * peep_uuid, char * hatch_uuid)
+static bool aws_publish_measurements(uint8_t * buf, uint32_t buf_len, char * peep_uuid, char * hatch_uuid)
 {
-  struct hatch_measurement old;
-  uint32_t total = 0;
-  bool r = true;
+   bool                     Result;
+   uint32_t                 TotalMeasurements = 0;
+   unsigned int             Index;
+   struct hatch_measurement old;
 
-  if (r) {
-    _format_json(buf, buf_len, meas, peep_uuid, hatch_uuid);
-  }
+   /* Determine how many measurements require uploading.                 */
+   TotalMeasurements = memory_measurement_db_total();
+   LOGI("%d old measurements to upload", TotalMeasurements);
+   if(TotalMeasurements > 0)
+   {
+      Result = memory_measurement_db_read_open();
+      if(Result)
+      {
+         for(Index = 0; ((Index<TotalMeasurements)&&(Result)); Index++)
+         {
+           Result = memory_measurement_db_read_entry(&old);
+           if (Result)
+           {
+              Result = _format_json(buf, buf_len, &old, peep_uuid, hatch_uuid);
+              if (Result)
+              {
+                 Result = aws_mqtt_publish("hatchtrack/data/put", (char *) buf, false);
+              }
+           }
+         }
 
-  if (r) {
-    r = aws_mqtt_publish("hatchtrack/data/put", (char *) buf, false);
-  }
+         memory_measurement_db_read_close();
 
-  if (r) {
-    total = memory_measurement_db_total();
-    LOGI("%d old measurements to upload", total);
-  }
-
-  if (r && total) {
-
-    r = memory_measurement_db_read_open();
-
-    while (r && total--) {
-      r = memory_measurement_db_read_entry(&old);
-
-      if (r) {
-        r = _format_json(buf, buf_len, &old, peep_uuid, hatch_uuid);
+         /* If successful, delete the old data.                          */
+         if(Result)
+         {
+           LOGI("deleting old data");
+           memory_measurement_db_delete_all();
+         }
       }
+   }
+   else
+   {
+      Result = true;
+   }
 
-      if (r) {
-        r = aws_mqtt_publish("hatchtrack/data/put", (char *) buf, false);
-      }
-    }
-
-    memory_measurement_db_read_close();
-
-    if (r) {
-      LOGI("deleting old data");
-      memory_measurement_db_delete_all();
-    }
-  }
-
-
-  return r;
+   return(Result);
 }
 
-static bool
-_get_wifi_ssid_pasword(char * ssid, char * password)
+static bool _get_wifi_ssid_pasword(char * ssid, char * password)
 {
   int len = 0;
   bool r = true;
@@ -188,8 +179,7 @@ _get_wifi_ssid_pasword(char * ssid, char * password)
   return r;
 }
 
-static void
-_shadow_callback(uint8_t * buf, uint16_t buf_len)
+static void _shadow_callback(uint8_t * buf, uint16_t buf_len)
 {
   bool r = true;
 
@@ -208,174 +198,379 @@ _shadow_callback(uint8_t * buf, uint16_t buf_len)
   }
 }
 
+#if defined(PEEP_TEST_STATE_MEASURE)
+
+   /* Test function to read and print stored measurements.               */
+static void PrintStoredMeasurements(void)
+{
+   bool                     Result;
+   uint32_t                 TotalMeasurements = 0;
+   unsigned int             Index;
+   struct hatch_measurement old;
+
+
+   LOGI("PrintStoredMeasurements() enter");
+
+   /* Determine how many measurements require uploading.                 */
+   TotalMeasurements = memory_measurement_db_total();
+   if(TotalMeasurements > 0)
+   {
+      Result = memory_measurement_db_read_open();
+      if(Result)
+      {
+         for(Index = 0; ((Index<TotalMeasurements)&&(Result)); Index++)
+         {
+           Result = memory_measurement_db_read_entry(&old);
+           if (Result)
+           {
+              LOGI("Stored Measurement %u:",        (Index + 1));
+              LOGI("   Timestamp   : %u",         old.unix_timestamp);
+              LOGI("   Temperature : %f C, %f F", old.temperature, ((old.temperature * ((float)(1.8))) + ((float)32)));
+              LOGI("   humidity    : %f",         old.humidity);
+           }
+         }
+
+         memory_measurement_db_read_close();
+      }
+   }
+   else
+   {
+      Result = true;
+   }
+
+   LOGI("PrintStoredMeasurements() exit %d", (int)Result);
+}
+
+#endif
+
 /***** Global Functions *****/
 
-void
-task_measure(void * arg)
+void task_measure(void * arg)
 {
-  EventBits_t bits = 0;
-  struct hatch_measurement meas;
-  char * peep_uuid = (char *) _uuid_start;
-  char * root_ca = (char *) _root_ca_start;
-  char * cert = (char *) _cert_start;
-  char * key = (char *) _key_start;
-  char * ssid = _ssid;
-  char * pass = _pass;
-  bool is_shadow_connected = false;
-  bool is_unix_time_in_range = false;
-  bool is_local_measure = false;
-  bool r = true;
+  char                     *ssid;
+  char                     *pass;
+  char                     *peep_uuid             = (char *) _uuid_start;
+  char                     *root_ca               = (char *) _root_ca_start;
+  char                     *cert                  = (char *) _cert_start;
+  char                     *key                   = (char *) _key_start;
+  bool                      publish_measurements;
+  bool                      invalid_time;
+  bool                      measurement_stored;
+  bool                      Result;
+  time_t                    now;
+  struct tm                 timeinfo;
+  uint8_t                  *buffer;
+  EventBits_t               bits                  = 0;
+  uint32_t                  total                 = 0;
+  struct hatch_measurement  meas;
 
   LOGI("start");
 
-  #if defined(PEEP_TEST_STATE_MEASURE)
+#if defined(PEEP_TEST_STATE_MEASURE)
   LOGI("PEEP_TEST_STATE_MEASURE");
-  #elif defined(PEEP_TEST_STATE_MEASURE_CONFIG)
+#elif defined(PEEP_TEST_STATE_MEASURE_CONFIG)
   LOGI("PEEP_TEST_STATE_MEASURE_CONFIG");
-  #endif
+#endif
 
+  /* Allocate the memory needd for this task.*/
   _sync_event_group = xEventGroupCreate();
-  _buffer = malloc(_BUFFER_LEN);
-  _ssid = malloc(WIFI_SSID_LEN_MAX);
-  _pass = malloc(WIFI_PASSWORD_LEN_MAX);
-  if ((NULL == _buffer) || (NULL == _ssid) || (NULL == _pass)) {
-    LOGE_TRAP("failed to allocate memory");
+  buffer            = malloc(_BUFFER_LEN);
+  ssid              = malloc(WIFI_SSID_LEN_MAX);
+  pass              = malloc(WIFI_PASSWORD_LEN_MAX);
+
+  if ((buffer != NULL) && (ssid != NULL) && (pass != NULL))
+  {
+     LOGI("initializing hardware");
+     Result = hal_init();
+     if(!Result)
+     {
+        /* not cleanest but it will work for now*/
+        goto ERROR;
+     }
+
+     /* Attempt to get the stored hatch config.*/
+     memset((uint8_t *)&_config, 0, sizeof(struct hatch_configuration));
+
+     memory_get_item(MEMORY_ITEM_HATCH_CONFIG, (uint8_t *) &_config, sizeof(struct hatch_configuration));
+
+     if (IS_HATCH_CONFIG_VALID(_config))
+     {
+        LOGI("loaded previous hatch configuration");
+
+        LOGI("Magic Word                    : 0x%X", _config.magic_word);
+        LOGI("Measurements Interval (s)     : %u",   _config.measure_interval_sec);
+        LOGI("Consecutive Low Readings      : %u",   _config.consecutive_low_readings);
+        LOGI("Consecutive High Readings     : %u",   _config.consecutive_high_readings);
+        LOGI("Measurements since Publishing : %u",   _config.measurements_since_last_published);
+        LOGI("Measurements before Publishing: %u",   _config.measurements_before_publishing);
+     }
+     else
+     {
+       LOGE("failed to load previous hatch configuration");
+
+       /* Load a default value for the config and store to nvm.*/
+       HATCH_CONFIG_INIT(_config);
+
+       memory_set_item(MEMORY_ITEM_HATCH_CONFIG, (uint8_t *) &_config, sizeof(struct hatch_configuration));
+     }
+
+     LOGI("performing measurement : Time : %ld", time(NULL));
+
+     /* Take the measurement and print some useful info.*/
+     Result = hal_read_temperature_humdity_pressure_resistance(&(meas.temperature), &(meas.humidity), &(meas.air_pressure), &(meas.gas_resistance));
+     if(Result)
+     {
+        LOGI("Temperature (C, F): %f, %f", meas.temperature, ((meas.temperature * ((float)(1.8))) + ((float)32)));
+        LOGI("humidity          : %f",     meas.humidity);
+     }
+     else
+     {
+        /* not cleanest but it will work for now (no cleanup to do, reboot*/
+        /* post deep sleep).                                              */
+        goto ERROR;
+     }
+
+     /* measurement taken, do book taking about when we should publish.   */
+     publish_measurements                       = false;
+     _config.measurements_since_last_published += 1;
+
+     /* Flag measurement is not stored yet (and time is not yet know to  */
+     /* be invalid).                                                     */
+     measurement_stored                         = false;
+     invalid_time                               = false;
+
+     /* Check to see if the time is valid (pulled from SNTP example.     */
+     time(&now);
+     localtime_r(&now, &timeinfo);
+
+     // Is time set? If not, tm_year will be (1970 - 1900).
+     if (timeinfo.tm_year < (2016 - 1900))
+     {
+         LOGI("Time is not set yet. Connecting to WiFi and getting time over NTP.");
+
+         invalid_time = true;
+     }
+     else
+     {
+        /* Time is valid.   so store measurement timestamp.              */
+        meas.unix_timestamp = time(NULL);
+        LOGI("current Unix time %u", meas.unix_timestamp);
+     }
+
+     /* check to see if it is time to publish these measurements.         */
+     if(_config.measurements_since_last_published >= _config.measurements_before_publishing)
+     {
+        /* time to publish the measurements.                              */
+        publish_measurements = true;
+
+        LOGI("Measurments %u, Threshold %u, Publishing", _config.measurements_since_last_published, _config.measurements_before_publishing);
+     }
+
+     /* Check to see if we are in the golden range.                       */
+     if(meas.temperature > _config.high_temperature)
+     {
+        /* Above the golden range, increment counts.                      */
+        _config.consecutive_high_readings      += 1;
+        _config.consecutive_low_readings        = 0;
+
+        LOGI("High Temp %f C, Threshold %f C, Consecutive %u, Threshold %u", meas.temperature, _config.high_temperature, _config.consecutive_high_readings, _config.consecutive_high_readings_error);
+
+        /* Check to see if this high reading puts us above the threshold */
+        /* before we will publish our results.                           */
+        if(_config.consecutive_high_readings >= _config.consecutive_high_readings_error)
+        {
+           publish_measurements = true;
+        }
+     }
+     else if(meas.temperature < _config.low_temperature)
+     {
+        /* below the golden range, increment counts.                     */
+        _config.consecutive_low_readings       += 1;
+        _config.consecutive_high_readings       = 0;
+
+        LOGI("Low Temp %f C, Threshold %f C, Consecutive %u, Threshold %u", meas.temperature, _config.low_temperature, _config.consecutive_low_readings, _config.consecutive_low_readings_error);
+
+        /* Check to see if this low reading puts us above the threshold */
+        /* before we will publish our results.                          */
+        if(_config.consecutive_low_readings >= _config.consecutive_low_readings_error)
+        {
+           publish_measurements = true;
+        }
+     }
+     else
+     {
+        LOGI("Golden Range Temp %f C, (%f C - %f C)", meas.temperature, _config.low_temperature, _config.high_temperature);
+
+        _config.consecutive_low_readings        = 0;
+        _config.consecutive_high_readings       = 0;
+     }
+
+     /* Check to see if we should publish our measurements (or if we     */
+     /* should connect to wifi to set time).                             */
+     if((publish_measurements) || (invalid_time))
+     {
+        /* Get the wifi SSID and password.                               */
+        Result = _get_wifi_ssid_pasword(ssid, pass);
+        if(Result)
+        {
+           LOGI("WiFi connect to SSID %s", ssid);
+
+           /* Attempt to connect to wifi.                                */
+           Result = wifi_connect(ssid, pass, 15);
+           if(Result)
+           {
+              LOGI("WiFi connected to SSID %s", ssid);
+
+              /* If we are here due to invalid time we have not stored a */
+              /* timestamp for this measurement.   Since we have         */
+              /* connected to wifi, and our wifi code will enable SNTP   */
+              /* when doing so, go ahead and update the measurement      */
+              /* timestamp here.                                         */
+              if(invalid_time)
+              {
+                 /* store measurement timestamp.                         */
+                 meas.unix_timestamp = time(NULL);
+                 LOGI("current Unix time %u", meas.unix_timestamp);
+
+                 invalid_time = false;
+              }
+
+              /* Attempt to connect shadow to get updated config data.   */
+              LOGI("AWS MQTT shadow connect");
+              Result = aws_mqtt_shadow_init(root_ca, cert, key, peep_uuid, 60);
+              if(Result)
+              {
+                 LOGI("AWS MQTT shadow get timeout %d seconds", _AWS_SHADOW_GET_TIMEOUT_SEC);
+                 Result = aws_mqtt_shadow_get(_shadow_callback, _AWS_SHADOW_GET_TIMEOUT_SEC);
+                 if(Result)
+                 {
+                    /* Wait for shadow to be fetched.                    */
+                    bits = 0;
+                    while ((bits & SYNC_BIT) == 0)
+                    {
+                       /* call AWS polling function.                     */
+                       aws_mqtt_shadow_poll(2500);
+
+                       /* delay for 100 ms, not sure if this is needed   */
+                       /* due to above function also delaying but leave  */
+                       /* in for now.                                    */
+                       vTaskDelay(100 / portTICK_PERIOD_MS);
+
+                       bits = xEventGroupWaitBits(_sync_event_group, SYNC_BIT, false, true, 0);
+                    }
+
+                    LOGI("AWS MQTT shadow disconnect");
+                    aws_mqtt_shadow_disconnect();
+                 }
+                 else
+                 {
+                    LOGE("Failed to get shadow.");
+                 }
+              }
+              else
+              {
+                 LOGE("Failed to init mqtt shadow.");
+              }
+
+              /* Regardless of status above, now attempt to publish      */
+              /* measurements.                                           */
+              LOGI("AWS MQTT connect");
+              Result = aws_mqtt_init(root_ca, cert, key, peep_uuid, 5);
+              if(Result)
+              {
+                 LOGI("aws_mqtt_init() success.");
+
+                 /* Go ahead and store the new measurement in flash.     */
+                 LOGI("storing measurement results in internal flash");
+                 memory_measurement_db_add(&meas);
+                 total = memory_measurement_db_total();
+                 LOGI("%d measurements stored", total);
+
+                 /* Flag measurement is stored and does not need to be   */
+                 /* stored later.                                        */
+                 measurement_stored = true;
+
+                 LOGI("publishing measurement results over MQTT");
+                 Result = aws_publish_measurements(buffer, _BUFFER_LEN, (char *) _uuid_start, _config.uuid);
+                 if(Result)
+                 {
+                    LOGI("published measurement results over MQTT");
+
+                    /* Reset counts.                                     */
+                    _config.consecutive_high_readings         = 0;
+                    _config.consecutive_low_readings          = 0;
+                    _config.measurements_since_last_published = 0;
+                 }
+                 else
+                 {
+                    LOGE("FAILED publishing measurement results over MQTT");
+                 }
+              }
+              else
+              {
+                 LOGE("aws_mqtt_init() failed.");
+              }
+
+              /* Disconnect from WiFi.                                   */
+              LOGI("WiFi disconnect");
+              wifi_disconnect();
+           }
+           else
+           {
+              LOGE("Failed to connect to wifi SSID = %s.", ssid);
+           }
+        }
+        else
+        {
+           LOGE("Failed to get saved SSID/Password for the wifi.");
+        }
+     }
+
+     /* Store the measurement if we have not already done so.            */
+     if(!measurement_stored)
+     {
+        /* if the time is still invalid, we must not have updated the    */
+        /* time so go ahead and return current internal timer.           */
+        if(invalid_time)
+        {
+           /* store measurement timestamp.                               */
+           meas.unix_timestamp = time(NULL);
+           LOGI("current Unix time %u", meas.unix_timestamp);
+        }
+
+        /* Go ahead and store the new measurement in flash.              */
+        LOGI("storing measurement results in internal flash");
+        memory_measurement_db_add(&meas);
+        total = memory_measurement_db_total();
+        LOGI("%d measurements stored", total);
+     }
+
+     /* Update flash with the config.                                    */
+     memory_set_item(MEMORY_ITEM_HATCH_CONFIG, (uint8_t *) &_config, sizeof(struct hatch_configuration));
+
+     //Note, may need a delay here.
+
+     // feed watchdog
+     vTaskDelay(100 / portTICK_PERIOD_MS);
+
+#if defined(PEEP_TEST_STATE_MEASURE)
+
+     /* Test function to read and print stored measurements.             */
+     PrintStoredMeasurements();
+
+#endif
+
+ERROR:
+
+     /* enter deep sleep.                                                */
+     hal_deep_sleep_timer_and_push_button(_config.measure_interval_sec);
   }
-  ssid = _ssid;
-  pass = _pass;
+  else
+  {
+     /* shouldn't happen as we are rebooting each time this is run, but if it
+        happens just deep sleep for a bit longer. */
+     LOGE_TRAP("failed to allocate memory");
 
-  if (r) {
-    r = _get_wifi_ssid_pasword(ssid, pass);
+     hal_deep_sleep_timer_and_push_button(5);
   }
-
-  if (r) {
-    LOGI("initializing hardware");
-    r = hal_init();
-  }
-
-  if (r) {
-    LOGI("performing measurement");
-    r = hal_read_temperature_humdity_pressure_resistance(
-      &(meas.temperature),
-      &(meas.humidity),
-      &(meas.air_pressure),
-      &(meas.gas_resistance));
-  }
-
-  if (r && !is_local_measure) {
-    LOGI("WiFi connect to SSID %s", ssid);
-    r = wifi_connect(ssid, pass, 15);
-    is_local_measure = (r) ? false : true;
-    r = true;
-  }
-
-  if (r && !is_local_measure) {
-    LOGI("AWS MQTT shadow connect");
-    r = aws_mqtt_shadow_init(root_ca, cert, key, peep_uuid, 60);
-  }
-
-  if (r && !is_local_measure) {
-    LOGI("AWS MQTT shadow get timeout %d seconds", _AWS_SHADOW_GET_TIMEOUT_SEC);
-    r = aws_mqtt_shadow_get(_shadow_callback, _AWS_SHADOW_GET_TIMEOUT_SEC);
-    is_shadow_connected = true;
-  }
-
-  while (r && !is_local_measure && (0 == (bits & SYNC_BIT))) {
-    aws_mqtt_shadow_poll(2500);
-    vTaskDelay(100 / portTICK_PERIOD_MS);
-
-    bits = xEventGroupWaitBits(
-      _sync_event_group,
-      SYNC_BIT,
-      false,
-      true,
-      0);
-  }
-
-  if (is_shadow_connected) {
-    memory_set_item(
-      MEMORY_ITEM_HATCH_CONFIG,
-      (uint8_t *) &_config,
-      sizeof(struct hatch_configuration));
-
-    // feed watchdog
-    vTaskDelay(100 / portTICK_PERIOD_MS);
-
-    LOGI("AWS MQTT shadow disconnect");
-    aws_mqtt_shadow_disconnect();
-  }
-  else {
-    memory_get_item(
-      MEMORY_ITEM_HATCH_CONFIG,
-      (uint8_t *) &_config,
-      sizeof(struct hatch_configuration));
-
-    if (false == IS_HATCH_CONFIG_VALID(_config)) {
-      // Can't get config from AWS nor is there a previous config stored in
-      // flash memory. We'll go to sleep for awhile and then try again in at a
-      // later point and hope for better results.
-      _config.measure_interval_sec = _HATCH_CONFIG_DEFAULT_MEASURE_INTERVAL_SEC;
-      r = false;
-
-      LOGE("failed to load previous hatch configuration");
-      LOGE("retry in %d seconds", _config.measure_interval_sec);
-    }
-    else {
-      LOGI("loaded previous hatch configuration");
-    }
-  }
-
-  if (r && !is_local_measure) {
-    LOGI("AWS MQTT connect");
-    r = aws_mqtt_init(root_ca, cert, key, peep_uuid, 5);
-    is_local_measure = (r) ? false : true;
-    r = true;
-  }
-
-  if (r) {
-    meas.unix_timestamp = time(NULL);
-    LOGI("current Unix time %d", meas.unix_timestamp);
-    if (meas.unix_timestamp < _UNIX_TIMESTAMP_THRESHOLD) {
-      LOGE("timestamp is invalid");
-      r = false;
-    }
-  }
-
-  if (r) {
-    if (meas.unix_timestamp >= _config.end_unix_timestamp) {
-      LOGI("reached end Unix time %d", _config.end_unix_timestamp);
-
-      peep_set_state(PEEP_STATE_MEASURE_CONFIG);
-
-      // we don't need to report this value
-      is_unix_time_in_range = false;
-    }
-    else {
-      LOGI("have not reached end Unix time %d", _config.end_unix_timestamp);
-      // haven't reached the end, need to push this measurement to the cloud
-      is_unix_time_in_range = true;
-    }
-  }
-
-  if (r && !is_local_measure && is_unix_time_in_range) {
-    LOGI("publishing measurement results over MQTT");
-    r = _publish_measurements(
-      _buffer,
-      _BUFFER_LEN,
-      &meas,
-      (char *) _uuid_start,
-      _config.uuid);
-  }
-  else if (r && is_local_measure && is_unix_time_in_range) {
-    uint32_t total = 0;
-
-    LOGI("storing measurement results in internal flash");
-    memory_measurement_db_add(&meas);
-    total = memory_measurement_db_total();
-    LOGI("%d measurements stored", total);
-  }
-
-  LOGI("WiFi disconnect");
-  wifi_disconnect();
-  hal_deep_sleep_timer_and_push_button(_config.measure_interval_sec);
 }

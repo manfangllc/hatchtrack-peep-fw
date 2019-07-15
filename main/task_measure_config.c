@@ -178,7 +178,11 @@ task_measure_config(void * arg)
   {
     LOGE("failed to load previous hatch configuration");
 
-    /* Load a default value for the config and store to nvm.*/
+    /* Load a default value for the config and store to nvm.  we do this */
+    /* since the AWS configuration does not set all of the required      */
+    /* fields.   The fields that aren't current set will be set to their */
+    /* application defaults here and the fields set via AWS will be      */
+    /* overwritten later.                                                */
     HATCH_CONFIG_INIT(_config);
 
     memory_set_item(MEMORY_ITEM_HATCH_CONFIG, (uint8_t *) &_config, sizeof(struct hatch_configuration));

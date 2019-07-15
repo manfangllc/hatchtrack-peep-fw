@@ -362,6 +362,8 @@ void task_measure(void * arg)
         /* Check to see if we have reach the end of measurement period.  */
         if(meas.unix_timestamp >= _config.end_unix_timestamp)
         {
+           LOGI("Reached end of measurement period : Timestamp %u, End Period %u.", meas.unix_timestamp, _config.end_unix_timestamp);
+
            /* reached the end of measurement period.  publish what we    */
            /* have                                                       */
            publish_measurements = true;
@@ -562,6 +564,8 @@ void task_measure(void * arg)
      /* Check to see if we have reach the end of measurement period.     */
      if(meas.unix_timestamp >= _config.end_unix_timestamp)
      {
+        LOGI("Reached end of measurement period : Timestamp %u, End Period %u.", meas.unix_timestamp, _config.end_unix_timestamp);
+
         /* Change to the measure config state next.                      */
         peep_set_state(PEEP_STATE_MEASURE_CONFIG);
 

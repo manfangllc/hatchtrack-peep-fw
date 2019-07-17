@@ -8,24 +8,20 @@
 
 /***** Enums *****/
 
-enum peep_state {
+typedef enum  {
   PEEP_STATE_MIN = 0,
 
   PEEP_STATE_UNKNOWN = 0,
   PEEP_STATE_BLE_CONFIG,
-  PEEP_STATE_DEEP_SLEEP,
   PEEP_STATE_MEASURE,
   PEEP_STATE_MEASURE_CONFIG,
 
   PEEP_STATE_MAX = 0xFFFF,
-};
+} peep_state_t;
 
 /***** Global Functions *****/
 
-bool
-peep_set_state(enum peep_state state);
-
-bool
-peep_get_state(enum peep_state * state);
+bool peep_set_state(peep_state_t state);
+bool peep_get_state(peep_state_t *state);
 
 #endif

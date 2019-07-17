@@ -17,26 +17,8 @@
 
 /***** Defines *****/
 
-// Comment this out to enter deep sleep when not active.
-//#define _NO_DEEP_SLEEP 1
-#define _BUFFER_LEN (2048)
-#define _AWS_SHADOW_GET_TIMEOUT_SEC (30)
-#define _UNIX_TIMESTAMP_THRESHOLD (1546300800)
-#define _HATCH_CONFIG_DEFAULT_MEASURE_INTERVAL_SEC (5 * 60)
-#define _HATCH_CONFIG_DEFAULT_END_UNIX_TIMESTAMP (2147483647)
-
-#if defined(PEEP_TEST_STATE_MEASURE) || (PEEP_TEST_STATE_MEASURE_CONFIG)
-  // SSID of the WiFi AP connect to.
-  #define _TEST_WIFI_SSID "thesignal"
-  // Password of the WiFi AP to connect to.
-  #define _TEST_WIFI_PASSWORD "palmerho"
-  // Leave this value alone unless you have a good reason to change it.
-  #define _TEST_HATCH_CONFIG_UUID "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-  // Seconds that Peep should deep sleep before taking a new measurement.
-  #define _TEST_HATCH_CONFIG_MEASURE_INTERVAL_SEC 900
-  // UTC Unix timestamp at which Peep should stop taking measurements.
-  #define _TEST_HATCH_CONFIG_END_UNIX_TIMESTAMP 1735084800
-#endif
+#define _BUFFER_LEN                                (2048)
+#define _AWS_SHADOW_GET_TIMEOUT_SEC                (30)
 
 /***** Extern Data *****/
 
@@ -53,11 +35,10 @@ extern const uint8_t _uuid_start[]   asm("_binary_uuid_txt_start");
 extern const uint8_t _uuid_end[]   asm("_binary_uuid_txt_end");
 
 /***** Local Data *****/
+#define EVENT_GROUP_BIT_HATCH_CONFIG_SET      (BIT0)
 
 static struct hatch_configuration _config;
-
-static EventGroupHandle_t _sync_event_group = NULL;
-static const int SYNC_BIT = BIT0;
+static EventGroupHandle_t        _sync_event_group = NULL;
 
 /***** Local Functions *****/
 
@@ -139,46 +120,6 @@ static bool aws_publish_measurements(uint8_t * buf, uint32_t buf_len, char * pee
    return(Result);
 }
 
-static bool _get_wifi_ssid_pasword(char * ssid, char * password)
-{
-  int len = 0;
-  bool r = true;
-
-#ifdef PEEP_TEST_STATE_MEASURE
-  (void) len;
-  strcpy(ssid, _TEST_WIFI_SSID);
-  strcpy(password, _TEST_WIFI_PASSWORD);
-#else
-  if (r) {
-    len = memory_get_item(
-      MEMORY_ITEM_WIFI_SSID,
-      (uint8_t *) ssid,
-      WIFI_SSID_LEN_MAX);
-    if (len <= 0) {
-      r = false;
-    }
-    else {
-      LOGI("SSID = %s", ssid);
-    }
-  }
-
-  if (r) {
-    len = memory_get_item(
-      MEMORY_ITEM_WIFI_PASS,
-      (uint8_t *) password,
-      WIFI_PASSWORD_LEN_MAX);
-    if (len <= 0) {
-      r = false;
-    }
-    else {
-      LOGI("PASS = %s", password);
-    }
-  }
-#endif
-
-  return r;
-}
-
 static void _shadow_callback(uint8_t * buf, uint16_t buf_len)
 {
   bool r = true;
@@ -188,13 +129,14 @@ static void _shadow_callback(uint8_t * buf, uint16_t buf_len)
 #endif
 
   r = json_parse_hatch_config_msg((char *) buf, &_config);
-  if (r) {
-    xEventGroupSetBits(_sync_event_group, SYNC_BIT);
+  if (r)
+  {
+     xEventGroupSetBits(_sync_event_group, EVENT_GROUP_BIT_HATCH_CONFIG_SET);
   }
   else {
-    LOGE("error decoding shadow JSON document");
-    LOGE("received %d bytes", buf_len);
-    ESP_LOG_BUFFER_HEXDUMP(__func__, buf, buf_len, ESP_LOG_ERROR);
+     LOGE("error decoding shadow JSON document");
+     LOGE("received %d bytes", buf_len);
+     ESP_LOG_BUFFER_HEXDUMP(__func__, buf, buf_len, ESP_LOG_ERROR);
   }
 }
 
@@ -245,10 +187,8 @@ static void PrintStoredMeasurements(void)
 
 /***** Global Functions *****/
 
-void task_measure(void * arg)
+uint32_t task_measure(TaskContext_t *TaskContext)
 {
-  char                     *ssid;
-  char                     *pass;
   char                     *peep_uuid             = (char *) _uuid_start;
   char                     *root_ca               = (char *) _root_ca_start;
   char                     *cert                  = (char *) _cert_start;
@@ -260,9 +200,10 @@ void task_measure(void * arg)
   time_t                    now;
   struct tm                 timeinfo;
   uint8_t                  *buffer;
-  EventBits_t               bits                  = 0;
+  EventBits_t               BitsRecv              = 0;
   uint32_t                  total                 = 0;
   uint32_t                  MeasurementInterval   = 60;
+  const EventBits_t         Bits2Wait             = (EVENT_GROUP_BIT_BUTTON_PRESS | EVENT_GROUP_BIT_HATCH_CONFIG_SET);
   struct hatch_measurement  meas;
 
   LOGI("start");
@@ -273,13 +214,10 @@ void task_measure(void * arg)
   LOGI("PEEP_TEST_STATE_MEASURE_CONFIG");
 #endif
 
-  /* Allocate the memory needd for this task.*/
-  _sync_event_group = xEventGroupCreate();
+  /* Allocate the memory needed for this task.*/
+  _sync_event_group = TaskContext->EventGroup;
   buffer            = malloc(_BUFFER_LEN);
-  ssid              = malloc(WIFI_SSID_LEN_MAX);
-  pass              = malloc(WIFI_PASSWORD_LEN_MAX);
-
-  if ((buffer != NULL) && (ssid != NULL) && (pass != NULL))
+  if (buffer != NULL)
   {
      LOGI("initializing hardware");
      Result = hal_init();
@@ -422,120 +360,110 @@ void task_measure(void * arg)
      /* should connect to wifi to set time).                             */
      if((publish_measurements) || (invalid_time))
      {
-        /* Get the wifi SSID and password.                               */
-        Result = _get_wifi_ssid_pasword(ssid, pass);
+        LOGI("WiFi connect to SSID %s", TaskContext->SSID);
+
+        /* Attempt to connect to wifi.                                */
+        //xxx this should take app event group and also exit for button press
+        Result = wifi_connect(TaskContext->SSID, TaskContext->Password, 15);
         if(Result)
         {
-           LOGI("WiFi connect to SSID %s", ssid);
+           LOGI("WiFi connected to SSID %s", TaskContext->SSID);
 
-           /* Attempt to connect to wifi.                                */
-           Result = wifi_connect(ssid, pass, 15);
+           /* If we are here due to invalid time we have not stored a */
+           /* timestamp for this measurement.   Since we have         */
+           /* connected to wifi, and our wifi code will enable SNTP   */
+           /* when doing so, go ahead and update the measurement      */
+           /* timestamp here.                                         */
+           if(invalid_time)
+           {
+              /* store measurement timestamp.                         */
+              meas.unix_timestamp = time(NULL);
+              LOGI("current Unix time %u", meas.unix_timestamp);
+
+              invalid_time = false;
+           }
+
+           /* Attempt to connect shadow to get updated config data.   */
+           LOGI("AWS MQTT shadow connect");
+           Result = aws_mqtt_shadow_init(root_ca, cert, key, peep_uuid, 60);
            if(Result)
            {
-              LOGI("WiFi connected to SSID %s", ssid);
-
-              /* If we are here due to invalid time we have not stored a */
-              /* timestamp for this measurement.   Since we have         */
-              /* connected to wifi, and our wifi code will enable SNTP   */
-              /* when doing so, go ahead and update the measurement      */
-              /* timestamp here.                                         */
-              if(invalid_time)
-              {
-                 /* store measurement timestamp.                         */
-                 meas.unix_timestamp = time(NULL);
-                 LOGI("current Unix time %u", meas.unix_timestamp);
-
-                 invalid_time = false;
-              }
-
-              /* Attempt to connect shadow to get updated config data.   */
-              LOGI("AWS MQTT shadow connect");
-              Result = aws_mqtt_shadow_init(root_ca, cert, key, peep_uuid, 60);
+              LOGI("AWS MQTT shadow get timeout %d seconds", _AWS_SHADOW_GET_TIMEOUT_SEC);
+              Result = aws_mqtt_shadow_get(_shadow_callback, _AWS_SHADOW_GET_TIMEOUT_SEC);
               if(Result)
               {
-                 LOGI("AWS MQTT shadow get timeout %d seconds", _AWS_SHADOW_GET_TIMEOUT_SEC);
-                 Result = aws_mqtt_shadow_get(_shadow_callback, _AWS_SHADOW_GET_TIMEOUT_SEC);
-                 if(Result)
+                 /* Wait for shadow to be fetched.                    */
+                 BitsRecv = 0;
+                 while ((BitsRecv & Bits2Wait) == 0)
                  {
-                    /* Wait for shadow to be fetched.                    */
-                    bits = 0;
-                    while ((bits & SYNC_BIT) == 0)
-                    {
-                       /* call AWS polling function.                     */
-                       aws_mqtt_shadow_poll(2500);
+                    /* call AWS polling function.                     */
+                    aws_mqtt_shadow_poll(2500);
 
-                       /* delay for 100 ms, not sure if this is needed   */
-                       /* due to above function also delaying but leave  */
-                       /* in for now.                                    */
-                       vTaskDelay(100 / portTICK_PERIOD_MS);
-
-                       bits = xEventGroupWaitBits(_sync_event_group, SYNC_BIT, false, true, 0);
-                    }
-
-                    LOGI("AWS MQTT shadow disconnect");
-                    aws_mqtt_shadow_disconnect();
+                    /* wait on the events to be received for 100 ms   */
+                    /* if nothing received by 100 ms later call the   */
+                    /* aws_mqtt_shadow_poll() function again.         */
+                    BitsRecv = xEventGroupWaitBits(_sync_event_group, Bits2Wait, false, true, (100 / portTICK_PERIOD_MS));
                  }
-                 else
-                 {
-                    LOGE("Failed to get shadow.");
-                 }
+
+                 LOGI("AWS MQTT shadow disconnect");
+                 aws_mqtt_shadow_disconnect();
               }
               else
               {
-                 LOGE("Failed to init mqtt shadow.");
+                 LOGE("Failed to get shadow.");
               }
-
-              /* Regardless of status above, now attempt to publish      */
-              /* measurements.                                           */
-              LOGI("AWS MQTT connect");
-              Result = aws_mqtt_init(root_ca, cert, key, peep_uuid, 5);
-              if(Result)
-              {
-                 LOGI("aws_mqtt_init() success.");
-
-                 /* Go ahead and store the new measurement in flash.     */
-                 LOGI("storing measurement results in internal flash");
-                 memory_measurement_db_add(&meas);
-                 total = memory_measurement_db_total();
-                 LOGI("%d measurements stored", total);
-
-                 /* Flag measurement is stored and does not need to be   */
-                 /* stored later.                                        */
-                 measurement_stored = true;
-
-                 LOGI("publishing measurement results over MQTT");
-                 Result = aws_publish_measurements(buffer, _BUFFER_LEN, (char *) _uuid_start, _config.uuid);
-                 if(Result)
-                 {
-                    LOGI("published measurement results over MQTT");
-
-                    /* Reset counts.                                     */
-                    _config.consecutive_high_readings         = 0;
-                    _config.consecutive_low_readings          = 0;
-                    _config.measurements_since_last_published = 0;
-                 }
-                 else
-                 {
-                    LOGE("FAILED publishing measurement results over MQTT");
-                 }
-              }
-              else
-              {
-                 LOGE("aws_mqtt_init() failed.");
-              }
-
-              /* Disconnect from WiFi.                                   */
-              LOGI("WiFi disconnect");
-              wifi_disconnect();
            }
            else
            {
-              LOGE("Failed to connect to wifi SSID = %s.", ssid);
+              LOGE("Failed to init mqtt shadow.");
            }
+
+           /* Regardless of status above, now attempt to publish      */
+           /* measurements.                                           */
+           LOGI("AWS MQTT connect");
+           Result = aws_mqtt_init(root_ca, cert, key, peep_uuid, 5);
+           if(Result)
+           {
+              LOGI("aws_mqtt_init() success.");
+
+              /* Go ahead and store the new measurement in flash.     */
+              LOGI("storing measurement results in internal flash");
+              memory_measurement_db_add(&meas);
+              total = memory_measurement_db_total();
+              LOGI("%d measurements stored", total);
+
+              /* Flag measurement is stored and does not need to be   */
+              /* stored later.                                        */
+              measurement_stored = true;
+
+              LOGI("publishing measurement results over MQTT");
+              Result = aws_publish_measurements(buffer, _BUFFER_LEN, (char *) _uuid_start, _config.uuid);
+              if(Result)
+              {
+                 LOGI("published measurement results over MQTT");
+
+                 /* Reset counts.                                     */
+                 _config.consecutive_high_readings         = 0;
+                 _config.consecutive_low_readings          = 0;
+                 _config.measurements_since_last_published = 0;
+              }
+              else
+              {
+                 LOGE("FAILED publishing measurement results over MQTT");
+              }
+           }
+           else
+           {
+              LOGE("aws_mqtt_init() failed.");
+           }
+
+           /* Disconnect from WiFi.                                   */
+           LOGI("WiFi disconnect");
+           wifi_disconnect();
         }
         else
         {
-           LOGE("Failed to get saved SSID/Password for the wifi.");
+           LOGE("Failed to connect to wifi SSID = %s.", TaskContext->SSID);
         }
      }
 
@@ -569,21 +497,18 @@ void task_measure(void * arg)
         /* Change to the measure config state next.                      */
         peep_set_state(PEEP_STATE_MEASURE_CONFIG);
 
-        /* set the configured measurement interval to 1 sec and this will*/
-        /* force us to almost immediately enter the measure config state */
-        /* to see if there is an updated measurement configuration.      */
-        MeasurementInterval = 1;
+        TaskContext->CurrentState = PEEP_STATE_MEASURE_CONFIG;
+
+        MeasurementInterval       = 0;
      }
      else
      {
         /* Use default measurement interval.                             */
         MeasurementInterval = _config.measure_interval_sec;
+
+        // feed watchdog
+        //xxx vTaskDelay(100 / portTICK_PERIOD_MS);
      }
-
-     //Note, may need a delay here.
-
-     // feed watchdog
-     vTaskDelay(100 / portTICK_PERIOD_MS);
 
 #if defined(PEEP_TEST_STATE_MEASURE)
 
@@ -594,8 +519,8 @@ void task_measure(void * arg)
 
 ERROR:
 
-     /* enter deep sleep.                                                */
-     hal_deep_sleep_timer_and_push_button(MeasurementInterval);
+     /* Free allocated memory.                                          */
+     free(buffer);
   }
   else
   {
@@ -603,6 +528,11 @@ ERROR:
         happens just deep sleep for a bit longer. */
      LOGE_TRAP("failed to allocate memory");
 
-     hal_deep_sleep_timer_and_push_button(5);
+     MeasurementInterval = 5;
   }
+
+  /* Clear global used in this module.                                  */
+  _sync_event_group = NULL;
+
+  return(MeasurementInterval);
 }

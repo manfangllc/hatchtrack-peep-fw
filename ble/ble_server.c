@@ -474,7 +474,7 @@ gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if,
 
   case ESP_GATTS_CONF_EVT:
     LOGI("ESP_GATTS_CONF_EVT, status %d", param->conf.status);
-    
+
     if (param->conf.status != ESP_GATT_OK) {
       esp_log_buffer_hex(__func__, param->conf.value, param->conf.len);
     }
@@ -516,22 +516,22 @@ gatts_callback(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if,
 }
 
 /***** Global Functions *****/
+static bool run_once = true;
 
-bool
-ble_init(void)
+bool ble_init(void)
 {
-  static bool run_once = true;
   esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
   esp_err_t err = ESP_OK;
 
-  if (run_once) {
+  if (run_once)
+  {
     run_once = false;
 
     _profile.app_id = 0;
     _profile.gatts_if = ESP_GATT_IF_NONE;
 
     _profile.char_permissions = ESP_GATT_PERM_WRITE | ESP_GATT_PERM_READ;
-    _profile.char_property = 
+    _profile.char_property =
       ESP_GATT_CHAR_PROP_BIT_WRITE |
       ESP_GATT_CHAR_PROP_BIT_READ |
       #if defined(BLE_SERVER_CONFIG_INDICATE_ENABLE)
@@ -594,6 +594,21 @@ ble_init(void)
   }
 
   return true;
+}
+
+void ble_cleanup(void)
+{
+   /* make sure we are initialized.  */
+   if(!run_once)
+   {
+      run_once = true;
+
+      /* Stop the bluetooth stack and controller.*/
+      esp_ble_gatts_app_unregister(_profile.app_id);
+      esp_bluedroid_disable();
+      esp_bluedroid_deinit();
+      esp_bt_controller_deinit();
+   }
 }
 
 void

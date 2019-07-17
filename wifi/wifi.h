@@ -8,7 +8,7 @@
 
 /***** Defines *****/
 
-#define WIFI_SSID_LEN_MAX (32)
+#define WIFI_SSID_LEN_MAX     (32)
 #define WIFI_PASSWORD_LEN_MAX (64)
 
 /***** Global Functions *****/

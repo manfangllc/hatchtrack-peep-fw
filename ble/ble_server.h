@@ -19,16 +19,11 @@ typedef void
 
 /***** Global Functions *****/
 
-extern bool
-ble_init(void);
+extern bool ble_init(void);
+extern void ble_cleanup(void);
 
-extern void
-ble_register_write_callback(ble_write_cb cb);
-
-extern void
-ble_register_read_callback(ble_read_cb cb);
-
-extern void
-ble_register_notify_indicate_callback(ble_notify_indicate_cb cb);
+extern void ble_register_write_callback(ble_write_cb cb);
+extern void ble_register_read_callback(ble_read_cb cb);
+extern void ble_register_notify_indicate_callback(ble_notify_indicate_cb cb);
 
 #endif

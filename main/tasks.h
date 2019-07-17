@@ -1,13 +1,24 @@
-#ifndef _TASKS_H
-#define _TASKS_H
+#ifndef _TASKS_H_
+#define _TASKS_H_
 
-extern void
-task_ble_config_wifi_credentials(void * arg);
+#include "wifi.h"
+#include "state.h"
+#include "system.h"
 
-extern void
-task_measure(void * arg);
+   /* All tasks must wait for this button and must not re-define this   */
+   /* bit.                                                              */
+#define EVENT_GROUP_BIT_BUTTON_PRESS    (BIT7)
 
-extern void
-task_measure_config(void * arg);
+typedef struct
+{
+   EventGroupHandle_t EventGroup;
+   peep_state_t       CurrentState;
+   char               SSID[WIFI_SSID_LEN_MAX];
+   char               Password[WIFI_PASSWORD_LEN_MAX];
+} TaskContext_t;
+
+extern uint32_t task_ble_config_wifi_credentials(TaskContext_t *TaskContext);
+extern uint32_t task_measure(TaskContext_t *TaskContext);
+extern uint32_t task_measure_config(TaskContext_t *TaskContext);
 
 #endif

@@ -16,169 +16,142 @@ extern const uint8_t _uuid_end[]   asm("_binary_uuid_txt_end");
 
 /***** Local Data *****/
 
-static EventGroupHandle_t _sync_event_group = NULL;
-static const int SYNC_BIT = BIT0;
-static const int BUTTON_BIT = BIT1;
+#define EVENT_GROUP_BIT_WIFI_PASS_RECV      (BIT0)
 
-static char * _ssid = NULL;
-static char * _pass = NULL;
-
-static bool _is_button_event = false;
+static char               *_ssid             = NULL;
+static char               *_pass             = NULL;
+static EventGroupHandle_t  _sync_event_group = NULL;
 
 /***** Local Functions *****/
 
-static void
-_push_button_callback(bool is_pressed)
+static void _ble_write_callback(uint8_t * buf, uint16_t len)
 {
-  BaseType_t task_yield = pdFALSE;
+   /* Due to re-organize, check for global validity to guard against    */
+   /* former task exiting (and clearing these) while BLE callbacks are  */
+   /* possible.                                                         */
+   if((_ssid != NULL) && (_pass != NULL) && (_sync_event_group != NULL))
+   {
+      json_parse_wifi_credentials_msg((char *) buf, _ssid, WIFI_SSID_LEN_MAX, _pass, WIFI_PASSWORD_LEN_MAX);
 
-  if (!_is_button_event && is_pressed) {
-    #if defined(PEEP_TEST_STATE_BLE_CONFIG)
-    // leave the push button initialized
-    #else
-    hal_deinit_push_button();
-    #endif
-
-    _is_button_event = true;
-    xEventGroupSetBitsFromISR(_sync_event_group, BUTTON_BIT, &task_yield);
-
-    if (task_yield) {
-      portYIELD_FROM_ISR();
-    }
-  }
+      if ((0 != _ssid[0]) && (0 != _pass[0]))
+      {
+         xEventGroupSetBits(_sync_event_group, EVENT_GROUP_BIT_WIFI_PASS_RECV);
+      }
+   }
 }
 
-static void
-_ble_write_callback(uint8_t * buf, uint16_t len)
-{
-  json_parse_wifi_credentials_msg(
-    (char *) buf,
-    _ssid,
-    WIFI_SSID_LEN_MAX,
-    _pass,
-    WIFI_PASSWORD_LEN_MAX);
-
-  if ((0 != _ssid[0]) && (0 != _pass[0])) {
-    xEventGroupSetBits(_sync_event_group, SYNC_BIT);
-  }
-}
-
-static void
-_ble_read_callback(uint8_t * buf, uint16_t * len, uint16_t max_len)
+static void _ble_read_callback(uint8_t * buf, uint16_t * len, uint16_t max_len)
 {
   snprintf((char *) buf, max_len, "{\n\"uuid\": \"%s\"\n}", _uuid_start);
   *len = strnlen((char *) buf, max_len);
   LOGI("sending...\n%s", (char *) buf);
 }
 
-void
-task_ble_config_wifi_credentials(void * arg)
+uint32_t task_ble_config_wifi_credentials(TaskContext_t *TaskContext)
 {
-  EventBits_t bits = 0;
-  bool r = true;
+  bool              r         = true;
+  uint32_t          DSReq     = 1;
+  EventBits_t       BitsRecv  = 0;
+  const EventBits_t Bits2Wait = (EVENT_GROUP_BIT_BUTTON_PRESS | EVENT_GROUP_BIT_WIFI_PASS_RECV);
 
   // Install gpio isr service. We do this here because the subsystems register
   // their own ISRs for the pins they use for user input.
   gpio_install_isr_service(ESP_INTR_FLAG_LEVEL1);
 
-  _ssid = malloc(WIFI_SSID_LEN_MAX);
-  _pass = malloc(WIFI_PASSWORD_LEN_MAX);
-  if ((NULL == _ssid) || (NULL == _pass)) {
-    LOGE_TRAP("failed to allocate memory");
-  }
+  /* Save required context variables that will be modified in callbacks */
+  /* into global variables.                                             */
+  _sync_event_group = TaskContext->EventGroup;
+  _ssid             = TaskContext->SSID;
+  _pass             = TaskContext->Password;
 
-  _sync_event_group = xEventGroupCreate();
+
+  /* Clear the SSID and password since we are in stage to set them.     */
   memset(_ssid, 0, WIFI_SSID_LEN_MAX);
   memset(_pass, 0, WIFI_PASSWORD_LEN_MAX);
 
-  if (r) {
-    LOGI("initialize bluetooth low energy");
-    r = ble_init();
-    if (!r) LOGE("failed to initialize bluetooth");
+  /* Initialize the BLE module.                                         */
+  LOGI("initialize bluetooth low energy");
+
+  r = ble_init();
+  if (!r)
+  {
+     LOGE("failed to initialize bluetooth");
   }
 
   ble_register_write_callback(_ble_write_callback);
   ble_register_read_callback(_ble_read_callback);
 
-  if (r) {
-    LOGI("initialize push button");
-    r = hal_init_push_button(_push_button_callback);
-    if (!r) LOGE("failed to initialize push button");
-  }
-
 #if defined(PEEP_TEST_STATE_BLE_CONFIG)
-  while (1) {
-    // Wait for BLE config to complete.
-    bits = xEventGroupWaitBits(
-      _sync_event_group,
-      SYNC_BIT | BUTTON_BIT,
-      true,
-      false,
-      portMAX_DELAY);
 
-    LOGI("got event");
+  while (1)
+  {
+     // Wait for BLE config to complete.
+     BitsRecv = xEventGroupWaitBits(_sync_event_group, Bits2Wait, true, false, portMAX_DELAY);
 
-    if (bits & SYNC_BIT) {
-      LOGI("ssid = %s", _ssid);
-      LOGI("password = %s", _pass);
-      _ssid[0] = 0;
-      _pass[0] = 0;
-    }
-    else if (bits & BUTTON_BIT) {
-      LOGI("push button");
-      vTaskDelay(1000 / portTICK_PERIOD_MS);
-      _is_button_event = false;
-    }
+     LOGI("got event: %u", (unsigned int)BitsRecv);
+
+     if (BitsRecv & EVENT_GROUP_BIT_WIFI_PASS_RECV)
+     {
+        LOGI("ssid = %s", _ssid);
+        LOGI("password = %s", _pass);
+        _ssid[0] = 0;
+        _pass[0] = 0;
+     }
+     else if (BitsRecv & EVENT_GROUP_BIT_BUTTON_PRESS)
+     {
+        LOGI("push button");
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+     }
   }
+
 #else
+
   // Wait for BLE config to complete.
-  bits = xEventGroupWaitBits(
-    _sync_event_group,
-    SYNC_BIT | BUTTON_BIT,
-    true,
-    false,
-    portMAX_DELAY);
+  BitsRecv = xEventGroupWaitBits(_sync_event_group, Bits2Wait, true, false, portMAX_DELAY);
+  if (BitsRecv & EVENT_GROUP_BIT_WIFI_PASS_RECV)
+  {
+     LOGI("received WiFi SSID and password");
 
-  if (bits & SYNC_BIT) {
-    LOGI("received WiFi SSID and password");
+     LOGI("saving WiFI SSID");
+     memory_set_item(MEMORY_ITEM_WIFI_SSID, (uint8_t *) _ssid, WIFI_SSID_LEN_MAX);
 
-    LOGI("saving WiFI SSID");
-    memory_set_item(
-      MEMORY_ITEM_WIFI_SSID,
-      (uint8_t *) _ssid,
-      WIFI_SSID_LEN_MAX);
+     // feed watchdog
+     vTaskDelay(100);
 
-    // feed watchdog
-    vTaskDelay(100);
+     LOGI("saving WiFI password");
+     memory_set_item(MEMORY_ITEM_WIFI_PASS, (uint8_t *) _pass, WIFI_PASSWORD_LEN_MAX);
 
-    LOGI("saving WiFI password");
-    memory_set_item(
-      MEMORY_ITEM_WIFI_PASS,
-      (uint8_t *) _pass,
-      WIFI_PASSWORD_LEN_MAX);
+     // feed watchdog
+     vTaskDelay(100);
 
-    // feed watchdog
-    vTaskDelay(100);
+     struct hatch_configuration config;
+     HATCH_CONFIG_INIT(config);
+     memory_set_item(MEMORY_ITEM_HATCH_CONFIG, (uint8_t *) &config, sizeof(struct hatch_configuration));
 
-    struct hatch_configuration config;
-    HATCH_CONFIG_INIT(config);
-    memory_set_item(
-      MEMORY_ITEM_HATCH_CONFIG,
-      (uint8_t *) &config,
-      sizeof(struct hatch_configuration));
+     // feed watchdog
+     vTaskDelay(100);
 
-    // feed watchdog
-    vTaskDelay(100);
+     LOGI("saving Peep state");
 
-    LOGI("saving Peep state");
+     /* Change the task state.                                          */
+     peep_set_state(PEEP_STATE_MEASURE_CONFIG);
 
-    peep_set_state(PEEP_STATE_MEASURE_CONFIG);
+     TaskContext->CurrentState = PEEP_STATE_MEASURE_CONFIG;
+
+     /* Do not enter deep sleep prior to entering measuring config      */
+     /* state.                                                          */
+     DSReq = 0;
   }
-  else if (bits & BUTTON_BIT) {
-    // User pressed push button. Go into deep sleep without changing state.
-    LOGI("push button");
-  }
+
+  /* disable bluetooth.                                                 */
+  ble_cleanup();
+
+  /* Clear globals.                                                     */
+  _sync_event_group = NULL;
+  _ssid             = NULL;
+  _pass             = NULL;
+
 #endif
 
-  hal_deep_sleep_push_button();
+  return(DSReq);
 }

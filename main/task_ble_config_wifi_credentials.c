@@ -8,6 +8,7 @@
 #include "state.h"
 #include "system.h"
 #include "wifi.h"
+#include "OSAL.h"
 
 /***** Extern Data *****/
 
@@ -16,11 +17,8 @@ extern const uint8_t _uuid_end[]   asm("_binary_uuid_txt_end");
 
 /***** Local Data *****/
 
-#define EVENT_GROUP_BIT_WIFI_PASS_RECV      (BIT0)
-
-static char               *_ssid             = NULL;
-static char               *_pass             = NULL;
-static EventGroupHandle_t  _sync_event_group = NULL;
+static char *_ssid = NULL;
+static char *_pass = NULL;
 
 /***** Local Functions *****/
 
@@ -29,13 +27,13 @@ static void _ble_write_callback(uint8_t * buf, uint16_t len)
    /* Due to re-organize, check for global validity to guard against    */
    /* former task exiting (and clearing these) while BLE callbacks are  */
    /* possible.                                                         */
-   if((_ssid != NULL) && (_pass != NULL) && (_sync_event_group != NULL))
+   if((_ssid != NULL) && (_pass != NULL))
    {
       json_parse_wifi_credentials_msg((char *) buf, _ssid, WIFI_SSID_LEN_MAX, _pass, WIFI_PASSWORD_LEN_MAX);
 
       if ((0 != _ssid[0]) && (0 != _pass[0]))
       {
-         xEventGroupSetBits(_sync_event_group, EVENT_GROUP_BIT_WIFI_PASS_RECV);
+         OSAL_SetEventBits(OSAL_EVENT_BITS_BLE_SYNC);
       }
    }
 }
@@ -49,10 +47,9 @@ static void _ble_read_callback(uint8_t * buf, uint16_t * len, uint16_t max_len)
 
 uint32_t task_ble_config_wifi_credentials(TaskContext_t *TaskContext)
 {
-  bool              r         = true;
-  uint32_t          DSReq     = 1;
-  EventBits_t       BitsRecv  = 0;
-  const EventBits_t Bits2Wait = (EVENT_GROUP_BIT_BUTTON_PRESS | EVENT_GROUP_BIT_WIFI_PASS_RECV);
+  bool        Result    = true;
+  uint32_t    DSReq     = 1;
+  EventBits_t BitsRecv  = 0;
 
   // Install gpio isr service. We do this here because the subsystems register
   // their own ISRs for the pins they use for user input.
@@ -60,10 +57,8 @@ uint32_t task_ble_config_wifi_credentials(TaskContext_t *TaskContext)
 
   /* Save required context variables that will be modified in callbacks */
   /* into global variables.                                             */
-  _sync_event_group = TaskContext->EventGroup;
-  _ssid             = TaskContext->SSID;
-  _pass             = TaskContext->Password;
-
+  _ssid = TaskContext->SSID;
+  _pass = TaskContext->Password;
 
   /* Clear the SSID and password since we are in stage to set them.     */
   memset(_ssid, 0, WIFI_SSID_LEN_MAX);
@@ -72,8 +67,8 @@ uint32_t task_ble_config_wifi_credentials(TaskContext_t *TaskContext)
   /* Initialize the BLE module.                                         */
   LOGI("initialize bluetooth low energy");
 
-  r = ble_init();
-  if (!r)
+  Result = ble_init();
+  if (!Result)
   {
      LOGE("failed to initialize bluetooth");
   }
@@ -86,18 +81,21 @@ uint32_t task_ble_config_wifi_credentials(TaskContext_t *TaskContext)
   while (1)
   {
      // Wait for BLE config to complete.
-     BitsRecv = xEventGroupWaitBits(_sync_event_group, Bits2Wait, true, false, portMAX_DELAY);
+     BitsRecv = OSAL_WaitEventBits(OSAL_EVENT_BITS_BLE_SYNC, portMAX_DELAY);
+
+     // clear received event bits
+     OSAL_ClearEventBits(BitsRecv);
 
      LOGI("got event: %u", (unsigned int)BitsRecv);
 
-     if (BitsRecv & EVENT_GROUP_BIT_WIFI_PASS_RECV)
+     if (BitsRecv & OSAL_EVENT_BITS_BLE_SYNC)
      {
         LOGI("ssid = %s", _ssid);
         LOGI("password = %s", _pass);
         _ssid[0] = 0;
         _pass[0] = 0;
      }
-     else if (BitsRecv & EVENT_GROUP_BIT_BUTTON_PRESS)
+     else if (BitsRecv & OSAL_EVENT_BITS_RESERVED)
      {
         LOGI("push button");
         vTaskDelay(1000 / portTICK_PERIOD_MS);
@@ -107,9 +105,12 @@ uint32_t task_ble_config_wifi_credentials(TaskContext_t *TaskContext)
 #else
 
   // Wait for BLE config to complete.
-  BitsRecv = xEventGroupWaitBits(_sync_event_group, Bits2Wait, true, false, portMAX_DELAY);
-  if (BitsRecv & EVENT_GROUP_BIT_WIFI_PASS_RECV)
+  BitsRecv = OSAL_WaitEventBits(OSAL_EVENT_BITS_BLE_SYNC, portMAX_DELAY);
+  if (BitsRecv & OSAL_EVENT_BITS_BLE_SYNC)
   {
+     /* Clear the BLE Sync bit.                                         */
+     OSAL_ClearEventBits(OSAL_EVENT_BITS_BLE_SYNC);
+
      LOGI("received WiFi SSID and password");
 
      LOGI("saving WiFI SSID");
@@ -147,9 +148,8 @@ uint32_t task_ble_config_wifi_credentials(TaskContext_t *TaskContext)
   ble_cleanup();
 
   /* Clear globals.                                                     */
-  _sync_event_group = NULL;
-  _ssid             = NULL;
-  _pass             = NULL;
+  _ssid = NULL;
+  _pass = NULL;
 
 #endif
 

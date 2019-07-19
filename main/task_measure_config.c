@@ -9,6 +9,7 @@
 #include "state.h"
 #include "system.h"
 #include "wifi.h"
+#include "OSAL.h"
 
 /***** Defines *****/
 
@@ -33,7 +34,6 @@ extern const uint8_t _uuid_end[]   asm("_binary_uuid_txt_end");
 #define EVENT_GROUP_BIT_HATCH_CONFIG_SET      (BIT0)
 
 static struct hatch_configuration _config;
-static EventGroupHandle_t         _sync_event_group = NULL;
 
 /***** Local Functions *****/
 
@@ -44,7 +44,7 @@ static void _shadow_callback(uint8_t * buf, uint16_t buf_len)
   r = json_parse_hatch_config_msg((char *) buf, &_config);
   if (r)
   {
-     xEventGroupSetBits(_sync_event_group, EVENT_GROUP_BIT_HATCH_CONFIG_SET);
+     OSAL_SetEventBits(OSAL_EVENT_BITS_HATCH_CONFIG_RECV);
   }
   else
   {
@@ -58,19 +58,17 @@ static void _shadow_callback(uint8_t * buf, uint16_t buf_len)
 
 uint32_t task_measure_config(TaskContext_t *TaskContext)
 {
-   bool               Result    = true;
-   char              *peep_uuid = (char *) _uuid_start;
-   char              *root_ca   = (char *) _root_ca_start;
-   char              *cert      = (char *) _cert_start;
-   char              *key       = (char *) _key_start;
-   uint32_t           DeepSleepTime;
-   EventBits_t        BitsRecv  = 0;
-   const EventBits_t  Bits2Wait = (EVENT_GROUP_BIT_BUTTON_PRESS | EVENT_GROUP_BIT_HATCH_CONFIG_SET);
+   bool                Result                = true;
+   char               *peep_uuid             = (char *) _uuid_start;
+   char               *root_ca               = (char *) _root_ca_start;
+   char               *cert                  = (char *) _cert_start;
+   char               *key                   = (char *) _key_start;
+   uint32_t            DeepSleepTime;
+   EventBits_t         BitsRecv              = 0;
+   unsigned int        Index;
+   const unsigned int  MaxLoopIterations     = 250;
 
    LOGI("start");
-
-   /* Save event group globally to be used in event callback.           */
-   _sync_event_group = TaskContext->EventGroup;
 
    /* Memset the global config structure.                               */
    memset(&_config, 0, sizeof(struct hatch_configuration));
@@ -104,7 +102,7 @@ uint32_t task_measure_config(TaskContext_t *TaskContext)
      memory_set_item(MEMORY_ITEM_HATCH_CONFIG, (uint8_t *) &_config, sizeof(struct hatch_configuration));
    }
 
-   /* Attempt to connect to wifi.                                         */
+   /* Attempt to connect to wifi.                                       */
    LOGI("WiFi connect to SSID %s", TaskContext->SSID);
    Result = wifi_connect(TaskContext->SSID, TaskContext->Password, 60);
    if(Result)
@@ -117,18 +115,22 @@ uint32_t task_measure_config(TaskContext_t *TaskContext)
          Result = aws_mqtt_shadow_get(_shadow_callback, _AWS_SHADOW_GET_TIMEOUT_SEC);
          if(Result)
          {
-            /* Wait for shadow to be fetched.                    */
-            BitsRecv = 0;
-            while ((BitsRecv & Bits2Wait) == 0)
+            /* Wait for shadow to be fetched.                           */
+            Index = 0;
+            while(((BitsRecv & (OSAL_EVENT_BITS_HATCH_CONFIG_RECV | OSAL_EVENT_BITS_RESERVED)) == 0) && (Index++ < MaxLoopIterations))
             {
-               /* call AWS polling function.                     */
-               aws_mqtt_shadow_poll(2500);
+               /* call AWS polling function.                            */
+               if(!aws_mqtt_shadow_poll(2500))
+                  break;
 
-               /* wait on the events to be received for 100 ms   */
-               /* if nothing received by 100 ms later call the   */
-               /* aws_mqtt_shadow_poll() function again.         */
-               BitsRecv = xEventGroupWaitBits(_sync_event_group, Bits2Wait, false, true, (100 / portTICK_PERIOD_MS));
+               /* wait on the events to be received for 100 ms          */
+               /* if nothing received by 100 ms later call the          */
+               /* aws_mqtt_shadow_poll() function again.                */
+               BitsRecv = OSAL_WaitEventBits(OSAL_EVENT_BITS_HATCH_CONFIG_RECV, (100 / portTICK_PERIOD_MS));
             }
+
+            /* Clear the hatch config received bit.                     */
+            OSAL_ClearEventBits(OSAL_EVENT_BITS_HATCH_CONFIG_RECV);
 
             LOGI("AWS MQTT shadow disconnect");
             aws_mqtt_shadow_disconnect();
@@ -154,13 +156,13 @@ uint32_t task_measure_config(TaskContext_t *TaskContext)
 
 #if defined(PEEP_TEST_STATE_MEASURE_CONFIG)
 
-   if (BitsRecv & EVENT_GROUP_BIT_BUTTON_PRESS)
+   if (BitsRecv & OSAL_EVENT_BITS_RESERVED)
    {
       LOGI("push button");
       vTaskDelay(1000 / portTICK_PERIOD_MS);
    }
 
-   if (BitsRecv & EVENT_GROUP_BIT_HATCH_CONFIG_SET)
+   if (BitsRecv & OSAL_EVENT_BITS_HATCH_CONFIG_RECV)
    {
       LOGI("uuid=%s",                       _config.uuid);
       LOGI("end_unix_timestamp=%d",         _config.end_unix_timestamp);
@@ -172,12 +174,12 @@ uint32_t task_measure_config(TaskContext_t *TaskContext)
 
 #else
 
-  if (BitsRecv & EVENT_GROUP_BIT_BUTTON_PRESS)
+  if (BitsRecv & OSAL_EVENT_BITS_RESERVED)
   {
      LOGI("user pressed push button");
   }
 
-  if (BitsRecv & EVENT_GROUP_BIT_HATCH_CONFIG_SET)
+  if (BitsRecv & OSAL_EVENT_BITS_HATCH_CONFIG_RECV)
   {
     LOGI("got AWS MQTT shadow");
     memory_set_item(MEMORY_ITEM_HATCH_CONFIG, (uint8_t *) &_config, sizeof(struct hatch_configuration));

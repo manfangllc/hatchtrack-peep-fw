@@ -8,6 +8,7 @@ EXTRA_COMPONENT_DIRS := \
   iot \
   icm20602 \
   peep \
+  OSAL \
   wifi
 
 include $(IDF_PATH)/make/project.mk

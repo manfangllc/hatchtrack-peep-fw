@@ -12,6 +12,7 @@
 #include "state.h"
 #include "system.h"
 #include "tasks.h"
+#include "OSAL.h"
 
 #if (defined(PEEP_TEST_STATE_MEASURE) || (PEEP_TEST_STATE_MEASURE_CONFIG))
    // SSID of the WiFi AP connect to.
@@ -96,7 +97,8 @@ void app_main(void)
    {
       LOGI("wakeup cause timer");
    }
-   else {
+   else
+   {
       LOGI("unknown wakeup cause");
    }
    hal_deep_sleep_timer_and_push_button(60);
@@ -132,10 +134,16 @@ void app_main(void)
 
    LOGI("Peep State %u\n\n", state);
 
+   /* Initialize abstaction layer.                                      */
+   if(!OSAL_Init())
+   {
+      LOGE("failed to initialize abstraction layer");
+      hal_deep_sleep_timer_and_push_button(1);
+   }
+
    /* Initialize the task context.                                      */
    memset(&TaskContext,  0,  sizeof(TaskContext));
 
-   TaskContext.EventGroup   = xEventGroupCreate();
    TaskContext.CurrentState = state;
 
    /* If we are in anything other than the BLE config state we should   */
@@ -171,56 +179,48 @@ void app_main(void)
       }
    }
 
-   if(TaskContext.EventGroup != NULL)
+   /* Loop forever in the main application.                          */
+   while(1)
    {
-      /* Loop forever in the main application.                          */
-      while(1)
+      /* Initialize the deep sleep time.                             */
+      DeepSleepTime = 0;
+
+      /* Handle current state.                                       */
+      switch(TaskContext.CurrentState)
       {
-         /* Initialize the deep sleep time.                             */
-         DeepSleepTime = 0;
+         case PEEP_STATE_BLE_CONFIG:
+            /* Use BLE to get the WiFi SSID/Password information     */
+            DeepSleepTime = task_ble_config_wifi_credentials(&TaskContext);
+            break;
+         case PEEP_STATE_MEASURE:
+            /* Enter the measurement state.                          */
+            DeepSleepTime = task_measure(&TaskContext);
+            break;
+         case PEEP_STATE_MEASURE_CONFIG:
+            /* Wait for updated measurement data from cloud.         */
+            DeepSleepTime = task_measure_config(&TaskContext);
+            break;
+         default:
+            LOGE("Invalid Peep State %u\n\n", TaskContext.CurrentState);
 
-         /* Handle current state.                                       */
-         switch(TaskContext.CurrentState)
-         {
-            case PEEP_STATE_BLE_CONFIG:
-               /* Use BLE to get the WiFi SSID/Password information     */
-               DeepSleepTime = task_ble_config_wifi_credentials(&TaskContext);
-               break;
-            case PEEP_STATE_MEASURE:
-               /* Enter the measurement state.                          */
-               DeepSleepTime = task_measure(&TaskContext);
-               break;
-            case PEEP_STATE_MEASURE_CONFIG:
-               /* Wait for updated measurement data from cloud.         */
-               DeepSleepTime = task_measure_config(&TaskContext);
-               break;
-            default:
-               LOGE("Invalid Peep State %u\n\n", TaskContext.CurrentState);
-
-               DeepSleepTime = 5;
-               break;
-         }
-
-         /* If requested, enter deep sleep.   Note deep sleep is only   */
-         /* exited by a system reboot.                                  */
-         if(DeepSleepTime > 0)
-         {
-            LOGI("Entering deep sleep for %u or until button press....", DeepSleepTime);
-
-            /* Enter deep sleep, function never returns.                */
-            hal_deep_sleep_timer_and_push_button(DeepSleepTime);
-         }
-         else
-         {
-            /* small delay in cases where we are not entering deep sleep*/
-            /* between states.                                          */
-            vTaskDelay(100);
-         }
+            DeepSleepTime = 5;
+            break;
       }
-   }
-   else
-   {
-      LOGE("failed to allocate event group");
-      hal_deep_sleep_timer_and_push_button(1);
+
+      /* If requested, enter deep sleep.   Note deep sleep is only   */
+      /* exited by a system reboot.                                  */
+      if(DeepSleepTime > 0)
+      {
+         LOGI("Entering deep sleep for %u or until button press....", DeepSleepTime);
+
+         /* Enter deep sleep, function never returns.                */
+         hal_deep_sleep_timer_and_push_button(DeepSleepTime);
+      }
+      else
+      {
+         /* small delay in cases where we are not entering deep sleep*/
+         /* between states.                                          */
+         vTaskDelay(100);
+      }
    }
 }

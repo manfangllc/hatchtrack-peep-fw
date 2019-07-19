@@ -12,21 +12,13 @@
 #include "esp_wifi.h"
 #include "esp_event_loop.h"
 #include "lwip/err.h"
+#include "OSAL.h"
 
 /***** Defines *****/
 
 #define POLL_SEC (1)
 
 /***** Local Data *****/
-
-// event group to signal when we are connected & ready to make a request
-static EventGroupHandle_t _wifi_event_group = NULL;
-
-/* The event group allows multiple bits for each event,
-   but we only care about one event - are we connected
-   to the AP with an IP? */
-const int WIFI_CONNECTED_BIT = BIT0;
-const int WIFI_DISCONNECT_BIT = BIT1;
 
 static volatile bool _is_active = false;
 
@@ -50,8 +42,8 @@ _event_handler(void *ctx, system_event_t *event)
       __func__,
       "got ip:%s",
       ip4addr_ntoa(&event->event_info.got_ip.ip_info.ip));
-    xEventGroupSetBits(_wifi_event_group, WIFI_CONNECTED_BIT);
-    xEventGroupClearBits(_wifi_event_group, WIFI_DISCONNECT_BIT);
+    OSAL_SetEventBits(OSAL_EVENT_BITS_WIFI_CONNECTED);
+    OSAL_ClearEventBits(OSAL_EVENT_BITS_WIFI_DISCONNECTED);
     break;
 
   case SYSTEM_EVENT_AP_STACONNECTED:
@@ -77,8 +69,8 @@ _event_handler(void *ctx, system_event_t *event)
     if (_is_active) {
       esp_wifi_connect();
     }
-    xEventGroupSetBits(_wifi_event_group, WIFI_DISCONNECT_BIT);
-    xEventGroupClearBits(_wifi_event_group, WIFI_CONNECTED_BIT);
+    OSAL_SetEventBits(OSAL_EVENT_BITS_WIFI_DISCONNECTED);
+    OSAL_ClearEventBits(OSAL_EVENT_BITS_WIFI_CONNECTED);
     break;
 
   default:
@@ -138,15 +130,13 @@ _init_time(int32_t timeout_sec)
 }
 
 /***** Global Functions *****/
-
-bool
-wifi_connect(char * ssid, char * password, int32_t timeout_sec)
+bool wifi_connect(char * ssid, char * password, int32_t timeout_sec)
 {
-  const TickType_t poll_ticks = (POLL_SEC * 1000) / portTICK_PERIOD_MS;
-  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-  wifi_config_t wifi_config;
-  EventBits_t bits = 0;
-  bool r = true;
+  const TickType_t   poll_ticks  = (POLL_SEC * 1000);
+  wifi_init_config_t cfg         = WIFI_INIT_CONFIG_DEFAULT();
+  wifi_config_t      wifi_config;
+  EventBits_t        bits        = 0;
+  bool               r           = true;
 
   // IF YOU DON'T DO THIS, YOU WILL HAVE A GARBAGE FILLED STRUCT
   memset(&wifi_config, 0, sizeof(wifi_config_t));
@@ -157,7 +147,6 @@ wifi_connect(char * ssid, char * password, int32_t timeout_sec)
   if (r) {
     _is_active = true;
     tcpip_adapter_init();
-    _wifi_event_group = xEventGroupCreate();
     ESP_ERROR_CHECK( esp_event_loop_init(_event_handler, NULL) );
     ESP_ERROR_CHECK( esp_wifi_init(&cfg) );
     ESP_ERROR_CHECK( esp_wifi_set_storage(WIFI_STORAGE_RAM) );
@@ -166,30 +155,30 @@ wifi_connect(char * ssid, char * password, int32_t timeout_sec)
     ESP_ERROR_CHECK( esp_wifi_start() );
 
     LOGI("%d second connection timeout", timeout_sec);
-    while ((0 == (bits & WIFI_CONNECTED_BIT)) && (timeout_sec > 0)) {
+    while ((0 == (bits & (OSAL_EVENT_BITS_WIFI_CONNECTED | OSAL_EVENT_BITS_RESERVED))) && (timeout_sec > 0))
+    {
       /* Wait for WiFI to show as connected */
-      bits = xEventGroupWaitBits(
-        _wifi_event_group,
-        WIFI_CONNECTED_BIT,
-        false,
-        true,
-        poll_ticks);
+      bits = OSAL_WaitEventBits(OSAL_EVENT_BITS_WIFI_CONNECTED, poll_ticks);
 
-      if (0 == (bits & WIFI_CONNECTED_BIT)) {
-        timeout_sec -= POLL_SEC;
+      if (0 == (bits & OSAL_EVENT_BITS_WIFI_CONNECTED))
+      {
+         timeout_sec -= POLL_SEC;
       }
     }
 
-    if (bits & WIFI_CONNECTED_BIT) {
+    if (bits & OSAL_EVENT_BITS_WIFI_CONNECTED)
+    {
       ESP_LOGI(__func__, "connected to SSID %s", wifi_config.sta.ssid);
     }
-    else {
+    else
+    {
       ESP_LOGE(__func__, "failed to connect to SSID %s", wifi_config.sta.ssid);
       r = false;
     }
   }
 
-  if (r) {
+  if (r)
+  {
     r = _init_time(timeout_sec);
   }
 
@@ -209,22 +198,19 @@ wifi_disconnect(void)
     LOGE("Failed to stop WiFi");
   }
 
-  bits = xEventGroupWaitBits(
-    _wifi_event_group,
-    WIFI_DISCONNECT_BIT,
-    false,
-    true,
-    5000 / portTICK_PERIOD_MS);
-  if (0 == (bits & WIFI_DISCONNECT_BIT)) {
+  bits = OSAL_WaitEventBits(OSAL_EVENT_BITS_WIFI_DISCONNECTED, 5000);
+  if (0 == (bits & OSAL_EVENT_BITS_WIFI_DISCONNECTED))
+  {
     LOGE("Failed to disconnect from WiFi");
   }
 
   r = esp_wifi_deinit();
-  if (ESP_OK != r) {
+  if (ESP_OK != r)
+  {
     LOGE("Failed to deinit WiFi");
   }
 
-  vEventGroupDelete(_wifi_event_group);
+  OSAL_ClearEventBits(OSAL_EVENT_BITS_WIFI_CONNECTED | OSAL_EVENT_BITS_WIFI_DISCONNECTED);
 
   return (ESP_OK == r) ? true : false;
 }

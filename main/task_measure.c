@@ -14,6 +14,7 @@
 #include "state.h"
 #include "system.h"
 #include "wifi.h"
+#include "OSAL.h"
 
 /***** Defines *****/
 
@@ -35,10 +36,7 @@ extern const uint8_t _uuid_start[]   asm("_binary_uuid_txt_start");
 extern const uint8_t _uuid_end[]   asm("_binary_uuid_txt_end");
 
 /***** Local Data *****/
-#define EVENT_GROUP_BIT_HATCH_CONFIG_SET      (BIT0)
-
 static struct hatch_configuration _config;
-static EventGroupHandle_t        _sync_event_group = NULL;
 
 /***** Local Functions *****/
 
@@ -129,11 +127,12 @@ static void _shadow_callback(uint8_t * buf, uint16_t buf_len)
 #endif
 
   r = json_parse_hatch_config_msg((char *) buf, &_config);
-  if (r)
+  if (!r)
   {
-     xEventGroupSetBits(_sync_event_group, EVENT_GROUP_BIT_HATCH_CONFIG_SET);
+     OSAL_SetEventBits(OSAL_EVENT_BITS_HATCH_CONFIG_RECV);
   }
-  else {
+  else
+  {
      LOGE("error decoding shadow JSON document");
      LOGE("received %d bytes", buf_len);
      ESP_LOG_BUFFER_HEXDUMP(__func__, buf, buf_len, ESP_LOG_ERROR);
@@ -203,8 +202,9 @@ uint32_t task_measure(TaskContext_t *TaskContext)
   EventBits_t               BitsRecv              = 0;
   uint32_t                  total                 = 0;
   uint32_t                  MeasurementInterval   = 60;
-  const EventBits_t         Bits2Wait             = (EVENT_GROUP_BIT_BUTTON_PRESS | EVENT_GROUP_BIT_HATCH_CONFIG_SET);
   struct hatch_measurement  meas;
+  unsigned int              Index;
+  const unsigned int        MaxLoopIterations     = 250;
 
   LOGI("start");
 
@@ -215,8 +215,7 @@ uint32_t task_measure(TaskContext_t *TaskContext)
 #endif
 
   /* Allocate the memory needed for this task.*/
-  _sync_event_group = TaskContext->EventGroup;
-  buffer            = malloc(_BUFFER_LEN);
+  buffer = malloc(_BUFFER_LEN);
   if (buffer != NULL)
   {
      LOGI("initializing hardware");
@@ -362,28 +361,27 @@ uint32_t task_measure(TaskContext_t *TaskContext)
      {
         LOGI("WiFi connect to SSID %s", TaskContext->SSID);
 
-        /* Attempt to connect to wifi.                                */
-        //xxx this should take app event group and also exit for button press
+        /* Attempt to connect to wifi.                                  */
         Result = wifi_connect(TaskContext->SSID, TaskContext->Password, 15);
         if(Result)
         {
            LOGI("WiFi connected to SSID %s", TaskContext->SSID);
 
-           /* If we are here due to invalid time we have not stored a */
-           /* timestamp for this measurement.   Since we have         */
-           /* connected to wifi, and our wifi code will enable SNTP   */
-           /* when doing so, go ahead and update the measurement      */
-           /* timestamp here.                                         */
+           /* If we are here due to invalid time we have not stored a   */
+           /* timestamp for this measurement.   Since we have           */
+           /* connected to wifi, and our wifi code will enable SNTP     */
+           /* when doing so, go ahead and update the measurement        */
+           /* timestamp here.                                           */
            if(invalid_time)
            {
-              /* store measurement timestamp.                         */
+              /* store measurement timestamp.                           */
               meas.unix_timestamp = time(NULL);
               LOGI("current Unix time %u", meas.unix_timestamp);
 
               invalid_time = false;
            }
 
-           /* Attempt to connect shadow to get updated config data.   */
+           /* Attempt to connect shadow to get updated config data.     */
            LOGI("AWS MQTT shadow connect");
            Result = aws_mqtt_shadow_init(root_ca, cert, key, peep_uuid, 60);
            if(Result)
@@ -392,18 +390,22 @@ uint32_t task_measure(TaskContext_t *TaskContext)
               Result = aws_mqtt_shadow_get(_shadow_callback, _AWS_SHADOW_GET_TIMEOUT_SEC);
               if(Result)
               {
-                 /* Wait for shadow to be fetched.                    */
-                 BitsRecv = 0;
-                 while ((BitsRecv & Bits2Wait) == 0)
+                 /* Wait for shadow to be fetched.                      */
+                 Index = 0;
+                 while(((BitsRecv & (OSAL_EVENT_BITS_HATCH_CONFIG_RECV | OSAL_EVENT_BITS_RESERVED)) == 0) && (Index++ < MaxLoopIterations))
                  {
-                    /* call AWS polling function.                     */
-                    aws_mqtt_shadow_poll(2500);
+                    /* call AWS polling function.                       */
+                    if(!aws_mqtt_shadow_poll(2500))
+                       break;
 
-                    /* wait on the events to be received for 100 ms   */
-                    /* if nothing received by 100 ms later call the   */
-                    /* aws_mqtt_shadow_poll() function again.         */
-                    BitsRecv = xEventGroupWaitBits(_sync_event_group, Bits2Wait, false, true, (100 / portTICK_PERIOD_MS));
+                    /* wait on the events to be received for 100 ms     */
+                    /* if nothing received by 100 ms later call the     */
+                    /* aws_mqtt_shadow_poll() function again.           */
+                    BitsRecv = OSAL_WaitEventBits(OSAL_EVENT_BITS_HATCH_CONFIG_RECV, (100 / portTICK_PERIOD_MS));
                  }
+
+                 /* Clear the hatch config received bit.               */
+                 OSAL_ClearEventBits(OSAL_EVENT_BITS_HATCH_CONFIG_RECV);
 
                  LOGI("AWS MQTT shadow disconnect");
                  aws_mqtt_shadow_disconnect();
@@ -530,9 +532,6 @@ ERROR:
 
      MeasurementInterval = 5;
   }
-
-  /* Clear global used in this module.                                  */
-  _sync_event_group = NULL;
 
   return(MeasurementInterval);
 }

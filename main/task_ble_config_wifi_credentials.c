@@ -51,10 +51,6 @@ uint32_t task_ble_config_wifi_credentials(TaskContext_t *TaskContext)
   uint32_t    DSReq     = 1;
   EventBits_t BitsRecv  = 0;
 
-  // Install gpio isr service. We do this here because the subsystems register
-  // their own ISRs for the pins they use for user input.
-  gpio_install_isr_service(ESP_INTR_FLAG_LEVEL1);
-
   /* Save required context variables that will be modified in callbacks */
   /* into global variables.                                             */
   _ssid = TaskContext->SSID;

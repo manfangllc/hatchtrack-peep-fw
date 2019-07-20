@@ -52,6 +52,27 @@ EventBits_t OSAL_WaitEventBits(EventBits_t Bits2WaitFor, TickType_t MaxWaitTimeM
    return(RetVal);
 }
 
+EventBits_t OSAL_WaitEventBitsNoReserved(EventBits_t Bits2WaitFor, bool ClearOnExit, TickType_t MaxWaitTimeMs)
+{
+   EventBits_t RetVal = 0;
+
+   if(EventGroup != NULL)
+   {
+      /* Always wait on the reserved bit.   Don't clear set bits on exit*/
+      /* as the caller can do this if requested.                        */
+      if(MaxWaitTimeMs != portMAX_DELAY)
+      {
+         RetVal = xEventGroupWaitBits(EventGroup, Bits2WaitFor, ClearOnExit, false, (MaxWaitTimeMs / portTICK_PERIOD_MS));
+      }
+      else
+      {
+         RetVal = xEventGroupWaitBits(EventGroup, Bits2WaitFor, ClearOnExit, false, portMAX_DELAY);
+      }
+   }
+
+   return(RetVal);
+}
+
 void OSAL_SetEventBits(EventBits_t Bits2Set)
 {
    if(EventGroup != NULL)
@@ -87,3 +108,18 @@ void OSAL_ClearEventBits(EventBits_t Events2Clear)
       xEventGroupClearBits(EventGroup, Events2Clear);
    }
 }
+
+EventBits_t OSAL_GetEventBits(void)
+{
+   EventBits_t ret_val = 0;
+
+   if(EventGroup != NULL)
+   {
+      /* Pass 0 so no events are cleared and current event mask is      */
+      /* returned.                                                      */
+      ret_val = xEventGroupClearBits(EventGroup, 0);
+   }
+
+   return(ret_val);
+}
+

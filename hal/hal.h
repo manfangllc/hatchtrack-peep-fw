@@ -8,40 +8,21 @@
 
 /***** Typedefs *****/
 
-typedef void
-(*hal_push_button_cb)(bool is_pressed);
+typedef void (*hal_push_button_cb)(bool is_pressed);
 
 /***** Global Functions *****/
 
-extern bool
-hal_init(void);
-
-extern bool
-hal_init_push_button(hal_push_button_cb cb);
-
-extern void
-hal_deinit_push_button(void);
-
-extern void
-hal_deep_sleep_timer(uint32_t sec);
-
-extern void
-hal_deep_sleep_push_button(void);
-
-extern bool
-hal_deep_sleep_is_wakeup_push_button(void);
-
-extern bool
-hal_deep_sleep_is_wakeup_timer(void);
-
-extern void
-hal_deep_sleep_timer_and_push_button(uint32_t sec);
-
-extern bool
-hal_read_temperature_humdity_pressure_resistance(float * p_temperature,
-  float * p_humidity, float * p_pressure, float * p_gas_resistance);
-
-extern bool
-hal_read_accel(float * p_gx, float * p_gy, float * p_gz);
+extern bool hal_init(void);
+extern bool hal_init_push_button(hal_push_button_cb cb);
+extern bool hal_push_button_pressed(void);
+extern void hal_deinit_push_button(void);
+extern void hal_deep_sleep_timer(uint32_t sec);
+extern void hal_deep_sleep_push_button(void);
+extern bool hal_deep_sleep_is_wakeup_push_button(void);
+extern bool hal_deep_sleep_is_wakeup_timer(void);
+extern uint32_t hal_deep_sleep_overhead(void);
+extern void hal_deep_sleep_timer_and_push_button(uint32_t sec);
+extern bool hal_read_temperature_humdity_pressure_resistance(float * p_temperature, float * p_humidity, float * p_pressure, float * p_gas_resistance);
+extern bool hal_read_accel(float * p_gx, float * p_gy, float * p_gz);
 
 #endif

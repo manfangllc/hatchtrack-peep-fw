@@ -7,6 +7,7 @@
 #include "driver/i2c.h"
 #include "driver/ledc.h"
 #include "driver/rtc_io.h"
+#include "sdkconfig.h"
 
 /***** Defines *****/
 
@@ -18,6 +19,14 @@
 #define _I2C_ADDR_ICM20602 (0x69)
 
 #define _PIN_NUM_BTN 26
+
+// Extra time it takes to enter and exit light sleep and deep sleep
+// For deep sleep, this is until the wake stub runs (not the app).
+#ifdef CONFIG_ESP32_RTC_CLOCK_SOURCE_EXTERNAL_CRYSTAL
+   #define DEEP_SLEEP_TIME_OVERHEAD_US (650 + 100 * 240 / CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ)
+#else
+   #define DEEP_SLEEP_TIME_OVERHEAD_US (250 + 100 * 240 / CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ)
+#endif // CONFIG_ESP32_RTC_CLOCK_SOURCE
 
 /***** Local Data *****/
 
@@ -35,7 +44,7 @@ static void IRAM_ATTR
 _push_button_isr(void * arg)
 {
   hal_push_button_cb cb = (hal_push_button_cb) arg;
-  bool is_pressed = (0 == gpio_get_level(_PIN_NUM_BTN)) ? true : false;
+  bool is_pressed       = hal_push_button_pressed();
 
   cb(is_pressed);
 }
@@ -261,8 +270,7 @@ hal_init(void)
   return r;
 }
 
-bool
-hal_init_push_button(hal_push_button_cb cb)
+bool hal_init_push_button(hal_push_button_cb cb)
 {
   gpio_config_t io_conf;
   esp_err_t err = ESP_OK;
@@ -270,23 +278,31 @@ hal_init_push_button(hal_push_button_cb cb)
   rtc_gpio_deinit(_PIN_NUM_BTN);
 
   //hook isr handler for gpio pins
-  gpio_isr_handler_add(_PIN_NUM_BTN, _push_button_isr, (void*) cb);
+  err = gpio_isr_handler_add(_PIN_NUM_BTN, _push_button_isr, (void*) cb);
+  if(err != ESP_OK)
+  {
+     LOGE("gpio_isr_handler_add() %d", err);
+  }
 
   // interrupt of rising edge
   io_conf.pin_bit_mask = ((uint64_t) 1) << _PIN_NUM_BTN;
   io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-  io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
-  io_conf.intr_type = GPIO_INTR_NEGEDGE;
-  io_conf.mode = GPIO_MODE_INPUT;
-  err = gpio_config(&io_conf);
+  io_conf.pull_up_en   = GPIO_PULLUP_ENABLE;
+  io_conf.intr_type    = GPIO_INTR_NEGEDGE;
+  io_conf.mode         = GPIO_MODE_INPUT;
+  err                  = gpio_config(&io_conf);
 
   return (ESP_OK == err) ? true : false;
 }
 
-void
-hal_deinit_push_button(void)
+void hal_deinit_push_button(void)
 {
   gpio_isr_handler_remove(_PIN_NUM_BTN);
+}
+
+bool hal_push_button_pressed(void)
+{
+   return((0 == gpio_get_level(_PIN_NUM_BTN)) ? true : false);
 }
 
 void
@@ -373,6 +389,11 @@ hal_deep_sleep_is_wakeup_timer(void)
   return (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) ?
     true :
     false;
+}
+
+uint32_t hal_deep_sleep_overhead(void)
+{
+   return(DEEP_SLEEP_TIME_OVERHEAD_US);
 }
 
 bool

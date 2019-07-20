@@ -25,8 +25,8 @@
 
 #define __USE_BUTTON_INTERRUPT__                0
 #define ONE_SECOND_IN_MICROSECONDS              (1 * 1000 * 1000)
-#define BUTTON_PRESS_TIME_FOR_RESET_US          (9500000)
-#define BUTTON_PRESS_TIME_FOR_RESET_MS          (9500)
+#define BUTTON_PRESS_TIME_FOR_RESET_US          (9000000)
+#define BUTTON_PRESS_TIME_FOR_RESET_MS          (9000)
 #define BUTTON_PRESS_DEBOUNCE_TIME_MS           (50)
 
 /***** Global Data *****/
@@ -119,6 +119,9 @@ static void ResetTaskState(void)
 
    memory_set_item(MEMORY_ITEM_WIFI_SSID, (uint8_t *)TaskContext.SSID,     WIFI_SSID_LEN_MAX);
    memory_set_item(MEMORY_ITEM_WIFI_PASS, (uint8_t *)TaskContext.Password, WIFI_PASSWORD_LEN_MAX);
+
+   /* Signal that the app reset has completed.                          */
+   OSAL_SetEventBits(OSAL_EVENT_BITS_APP_RESET_COMPLETE);
 }
 
 /***** Global Functions *****/
@@ -133,6 +136,7 @@ static void PushButtonTask(void* arg)
    int64_t     ButtonPressTime;
    int64_t     Duration;
    uint8_t     FirstLoop;
+   int64_t     ButtonPressAdjust;
 
 #if __USE_BUTTON_INTERRUPT__
 
@@ -149,13 +153,21 @@ static void PushButtonTask(void* arg)
    /* to see if the push button is still pressed.                       */
    if((hal_deep_sleep_is_wakeup_push_button()) && (hal_push_button_pressed()))
    {
+      /* Set the button press adjustment for when button press wakes us */
+      /* deep sleep.                                                    */
+      ButtonPressAdjust = hal_deep_sleep_overhead();
+
       /* Only in the case of waking up from deep sleep via push button  */
       /* will we bypass logic that waits on the posedge from the ISR    */
       /* before tracking the push button state with debounce.           */
       OSAL_SetEventBits(OSAL_EVENT_BITS_BUTTON_POSEDGE);
    }
+   else
+   {
+      ButtonPressAdjust = 0;
+   }
 
-   LOGI("Push Button Thread Start");
+   LOGI("Push Button Thread Start : Button Adjust Duration %lld", ButtonPressAdjust);
 
    /* Loop forever.                                                     */
    while(1)
@@ -177,7 +189,7 @@ static void PushButtonTask(void* arg)
 #endif
       {
 
-         /* Get current time.                                              */
+         /* Get current time.                                           */
          CurrentTime = esp_timer_get_time();
 
          LOGI("Button Press at %lld", CurrentTime);
@@ -212,7 +224,15 @@ static void PushButtonTask(void* arg)
             }
          }
 
-         /* Signal that the reserved state has occurred.             */
+         /* Adjust the pressed duration by the amount of time it takes  */
+         /* to exit deep sleep.                                         */
+         if(ButtonPressAdjust != 0)
+         {
+            Duration          += ButtonPressAdjust;
+            ButtonPressAdjust  = 0;
+         }
+
+         /* Signal that the reserved state has occurred.                */
          if(Duration >= BUTTON_PRESS_TIME_FOR_RESET_US)
          {
             CurrentTime = esp_timer_get_time();
@@ -220,6 +240,14 @@ static void PushButtonTask(void* arg)
             LOGI("Resetting application state at %lld", CurrentTime);
 
             OSAL_SetEventBits(OSAL_EVENT_BITS_RESERVED);
+
+            LOGI("Waiting for application reset to occur.....");
+
+            /* Wait for the reset to be processed before processing any */
+            /* more button presses.                                     */
+            OSAL_WaitEventBitsNoReserved(OSAL_EVENT_BITS_APP_RESET_COMPLETE, true, portMAX_DELAY);
+
+            LOGI("application reset complete.....");
          }
 
 #if (__USE_BUTTON_INTERRUPT__ == 0)

@@ -17,10 +17,10 @@
 
 #if (defined(PEEP_TEST_STATE_MEASURE) || (PEEP_TEST_STATE_MEASURE_CONFIG))
    // SSID of the WiFi AP connect to.
-   #define _TEST_WIFI_SSID     "Cisco38992"
+   #define _TEST_WIFI_SSID     "test"
 
    // Password of the WiFi AP to connect to.
-   #define _TEST_WIFI_PASSWORD "@GuestsMonitored@1776"
+   #define _TEST_WIFI_PASSWORD "test"
 #endif
 
 #define __USE_BUTTON_INTERRUPT__                0

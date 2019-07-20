@@ -468,17 +468,6 @@ void app_main(void)
    bool          r     = true;
    peep_state_t  state = PEEP_STATE_UNKNOWN;
 
-#if (defined (PEEP_TEST_STATE_DEEP_SLEEP) || defined(PEEP_TEST_STATE_MEASURE) || defined(PEEP_TEST_STATE_MEASURE_CONFIG) || defined (PEEP_TEST_STATE_BLE_CONFIG))
-   //xxx {
-   //xxx    uint32_t n = 10;
-   //xxx    do
-   //xxx    {
-   //xxx       LOGI("Starting in %d...", n--);
-   //xxx       vTaskDelay(1000 / portTICK_PERIOD_MS);
-   //xxx    } while (n);
-   //xxx }
-#endif
-
    nvs_flash_init();
    r = memory_init();
    RESULT_TEST_ERROR_TRACE(r);

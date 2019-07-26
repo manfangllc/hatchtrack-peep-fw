@@ -1,5 +1,5 @@
-#ifndef _MEMORY_H
-#define _MEMORY_H
+#ifndef _MEMORY_H_
+#define _MEMORY_H_
 
 /***** Includes *****/
 

@@ -10,6 +10,7 @@
 #include "hal.h"
 #include "memory.h"
 #include "memory_measurement_db.h"
+#include "cert.h"
 #include "state.h"
 #include "system.h"
 #include "tasks.h"
@@ -124,7 +125,117 @@ static void ResetTaskState(void)
    OSAL_SetEventBits(OSAL_EVENT_BITS_APP_RESET_COMPLETE);
 }
 
-/***** Global Functions *****/
+   /* Allocates the correct number of bytes to hold the specified       */
+   /* certificate item and then reads the certificate item into the     */
+   /* allocated buffer (which it returns if successfull.                */
+static char *AllocateGetCertificateItem(cert_item_t item)
+{
+   char   *Result = NULL;
+   size_t  item_length;
+
+   /* Get the memory size required for the item.                        */
+   if(cert_get_item_size(item, &item_length))
+   {
+      /* Always allocate extra byte in case we the item length is 0.    */
+      ++item_length;
+
+      /* Allocate memory to get the item.                               */
+      if((Result = malloc(item_length)) != NULL)
+      {
+         /* Add null terminating to make this 0 length string.          */
+         Result[0] = '\0';
+
+         /* Get the item.                                               */
+         if(!cert_get_item(item, &item_length, Result))
+         {
+            /* Failed to get item, free memory.                         */
+            free(Result);
+
+            Result = NULL;
+         }
+      }
+   }
+
+   return(Result);
+}
+
+   /* This function allocates memory for all the certificate items and  */
+   /* reads them.                                                       */
+static bool InitializeCertiticates(void)
+{
+   bool Result = true;
+
+   /* Get the root certificate.                                         */
+   TaskContext.root_ca = AllocateGetCertificateItem(CERT_ITEM_ROOT_CA);
+   if(TaskContext.root_ca == NULL)
+   {
+      Result = false;
+   }
+
+   /* Get the peep uuid.                                                */
+   if(Result)
+   {
+      TaskContext.peep_uuid = AllocateGetCertificateItem(CERT_ITEM_UUID);
+      if(TaskContext.peep_uuid == NULL)
+      {
+         Result = false;
+      }
+   }
+
+   /* Get the peep certificate.                                         */
+   if(Result)
+   {
+      TaskContext.cert = AllocateGetCertificateItem(CERT_ITEM_CERTIFICATE);
+      if(TaskContext.cert == NULL)
+      {
+         Result = false;
+      }
+   }
+
+   /* Get the peep key.                                                 */
+   if(Result)
+   {
+      TaskContext.key = AllocateGetCertificateItem(CERT_ITEM_KEY);
+      if(TaskContext.key == NULL)
+      {
+         Result = false;
+      }
+   }
+
+   /* If we failed, free allocated memory.                              */
+   if(!Result)
+   {
+      if(TaskContext.root_ca != NULL)
+      {
+         free(TaskContext.root_ca);
+      }
+
+      if(TaskContext.peep_uuid != NULL)
+      {
+         free(TaskContext.peep_uuid);
+      }
+
+      if(TaskContext.cert != NULL)
+      {
+         free(TaskContext.cert);
+      }
+
+      if(TaskContext.key != NULL)
+      {
+         free(TaskContext.key);
+      }
+
+      TaskContext.root_ca   = NULL;
+      TaskContext.peep_uuid = NULL;
+      TaskContext.cert      = NULL;
+      TaskContext.key       = NULL;
+   }
+
+
+   return(Result);
+}
+
+/***** Task Functions *****/
 
 static void PushButtonTask(void* arg)
 {
@@ -264,11 +375,17 @@ static void PushButtonTask(void* arg)
 
 static void MainTask(void* arg)
 {
+   char          DummyString[4];
    int64_t       Time1;
    int64_t       Time2;
    int64_t       Duration;
    uint32_t      DeepSleepTime;
    EventBits_t   EventMask;
+
+#if (defined(PEEP_TEST_STATE_MEASURE) || (PEEP_TEST_STATE_MEASURE_CONFIG))
+   size_t        ItemLength;
+   unsigned int  Index;
+#endif
 
    LOGI("Main Task Start Start");
 
@@ -303,6 +420,40 @@ static void MainTask(void* arg)
 
 #endif
       }
+   }
+
+#if (defined(PEEP_TEST_STATE_MEASURE) || (PEEP_TEST_STATE_MEASURE_CONFIG))
+
+   for(Index=CERT_ITEM_ROOT_CA; Index < CERT_ITEM_LAST_ITEM; Index++)
+   {
+      if(cert_get_item_size((cert_item_t)Index, &ItemLength))
+      {
+         LOGI("%s: Item %u required size %u", __func__,  Index, (unsigned int)ItemLength);
+      }
+      else
+      {
+         LOGE("%s: failed to get item size %u", __func__,  Index);
+      }
+   }
+
+#endif
+
+   /* Initialize the certificates.                                      */
+   TaskContext.peep_uuid = NULL;
+   TaskContext.root_ca   = NULL;
+   TaskContext.cert      = NULL;
+   TaskContext.key       = NULL;
+
+   if(!InitializeCertiticates())
+   {
+      LOGE("%s: failed to initialize certificates", __func__);
+
+      memset(DummyString, 0, sizeof(DummyString));
+
+      TaskContext.peep_uuid = &(DummyString[0]);
+      TaskContext.root_ca   = &(DummyString[1]);
+      TaskContext.cert      = &(DummyString[2]);
+      TaskContext.key       = &(DummyString[3]);
    }
 
    /* Loop forever in the main application.                             */
@@ -463,16 +614,24 @@ static void MainTask(void* arg)
    }
 }
 
+/***** Global Functions *****/
+
 void app_main(void)
 {
-   bool          r     = true;
-   peep_state_t  state = PEEP_STATE_UNKNOWN;
+   bool         r     = true;
+   peep_state_t state = PEEP_STATE_UNKNOWN;
 
+   /* Initialize the default NVS partition which is used by some the    */
+   /* ESP IDF components.                                               */
    nvs_flash_init();
+
    r = memory_init();
    RESULT_TEST_ERROR_TRACE(r);
 
    r = memory_measurement_db_init();
+   RESULT_TEST_ERROR_TRACE(r);
+
+   r = cert_init();
    RESULT_TEST_ERROR_TRACE(r);
 
 #if defined (PEEP_TEST_STATE_DEEP_SLEEP)
@@ -494,17 +653,25 @@ void app_main(void)
 
 #elif defined(PEEP_TEST_STATE_MEASURE)
 
+   LOGI("TESTING PEEP_STATE_MEASURE");
+
    state = PEEP_STATE_MEASURE;
 
 #elif defined(PEEP_TEST_STATE_MEASURE_CONFIG)
+
+   LOGI("TESTING PEEP_STATE_MEASURE_CONFIG");
 
    state = PEEP_STATE_MEASURE_CONFIG;
 
 #elif defined (PEEP_TEST_STATE_BLE_CONFIG)
 
+   LOGI("TESTING PEEP_STATE_BLE_CONFIG");
+
    state = PEEP_STATE_BLE_CONFIG;
 
 #else
+
+   LOGI("QUERYING PEEP STATE FROM FLASH");
 
    /* Get the current application state.                                */
    if (!peep_get_state(&state))

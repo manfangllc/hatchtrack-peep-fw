@@ -1,0 +1,6 @@
+key,type,encoding,value
+peep_cert,namespace,,
+peep_root_ca,file,string,main/root_ca.txt
+peep_cert,file,string,main/cert.txt
+peep_uuid,file,string,main/uuid.txt
+peep_key,file,string,main/key.txt

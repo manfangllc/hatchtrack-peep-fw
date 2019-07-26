@@ -17,18 +17,6 @@
 
 /***** Extern Data *****/
 
-extern const uint8_t _root_ca_start[]   asm("_binary_root_ca_txt_start");
-extern const uint8_t _root_ca_end[]   asm("_binary_root_ca_txt_end");
-
-extern const uint8_t _cert_start[]   asm("_binary_cert_txt_start");
-extern const uint8_t _cert_end[]   asm("_binary_cert_txt_end");
-
-extern const uint8_t _key_start[]   asm("_binary_key_txt_start");
-extern const uint8_t _key_end[]   asm("_binary_key_txt_end");
-
-extern const uint8_t _uuid_start[]   asm("_binary_uuid_txt_start");
-extern const uint8_t _uuid_end[]   asm("_binary_uuid_txt_end");
-
 /***** Local Data *****/
 
 #define EVENT_GROUP_BIT_HATCH_CONFIG_SET      (BIT0)
@@ -59,10 +47,6 @@ static void _shadow_callback(uint8_t * buf, uint16_t buf_len)
 uint32_t task_measure_config(TaskContext_t *TaskContext)
 {
    bool                Result                = true;
-   char               *peep_uuid             = (char *) _uuid_start;
-   char               *root_ca               = (char *) _root_ca_start;
-   char               *cert                  = (char *) _cert_start;
-   char               *key                   = (char *) _key_start;
    uint32_t            DeepSleepTime;
    EventBits_t         BitsRecv              = 0;
    unsigned int        Index;
@@ -108,7 +92,7 @@ uint32_t task_measure_config(TaskContext_t *TaskContext)
    if(Result)
    {
       LOGI("AWS MQTT shadow connect");
-      Result = aws_mqtt_shadow_init(root_ca, cert, key, peep_uuid, 60);
+      Result = aws_mqtt_shadow_init(TaskContext->root_ca, TaskContext->cert, TaskContext->key, TaskContext->peep_uuid, 60);
       if (Result)
       {
          LOGI("AWS MQTT shadow get timeout %d seconds", _AWS_SHADOW_GET_TIMEOUT_SEC);

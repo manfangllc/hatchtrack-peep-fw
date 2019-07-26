@@ -12,13 +12,11 @@
 
 /***** Extern Data *****/
 
-extern const uint8_t _uuid_start[]   asm("_binary_uuid_txt_start");
-extern const uint8_t _uuid_end[]   asm("_binary_uuid_txt_end");
-
 /***** Local Data *****/
 
 static char *_ssid = NULL;
 static char *_pass = NULL;
+static char *_uuid = NULL;
 
 /***** Local Functions *****/
 
@@ -40,7 +38,7 @@ static void _ble_write_callback(uint8_t * buf, uint16_t len)
 
 static void _ble_read_callback(uint8_t * buf, uint16_t * len, uint16_t max_len)
 {
-  snprintf((char *) buf, max_len, "{\n\"uuid\": \"%s\"\n}", _uuid_start);
+  snprintf((char *) buf, max_len, "{\n\"uuid\": \"%s\"\n}", _uuid);
   *len = strnlen((char *) buf, max_len);
   LOGI("sending...\n%s", (char *) buf);
 }
@@ -55,6 +53,7 @@ uint32_t task_ble_config_wifi_credentials(TaskContext_t *TaskContext)
   /* into global variables.                                             */
   _ssid = TaskContext->SSID;
   _pass = TaskContext->Password;
+  _uuid = TaskContext->peep_uuid;
 
   /* Clear the SSID and password since we are in stage to set them.     */
   memset(_ssid, 0, WIFI_SSID_LEN_MAX);

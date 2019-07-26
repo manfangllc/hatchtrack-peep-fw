@@ -8,12 +8,6 @@ COMPONENT_PRIV_INCLUDEDIRS := \
   ../OSAL \
   ../wifi
 
-COMPONENT_EMBED_TXTFILES := \
-  uuid.txt \
-  root_ca.txt \
-  cert.txt \
-  key.txt
-
 ifeq ($(PROJECT_NAME),hatchtrack-peep-unit-test-fw)
   # The following line is needed to force the linker to include all the object
   # files into the application, even if the functions in these object files

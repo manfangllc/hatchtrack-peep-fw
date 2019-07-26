@@ -23,18 +23,6 @@
 
 /***** Extern Data *****/
 
-extern const uint8_t _root_ca_start[]   asm("_binary_root_ca_txt_start");
-extern const uint8_t _root_ca_end[]   asm("_binary_root_ca_txt_end");
-
-extern const uint8_t _cert_start[]   asm("_binary_cert_txt_start");
-extern const uint8_t _cert_end[]   asm("_binary_cert_txt_end");
-
-extern const uint8_t _key_start[]   asm("_binary_key_txt_start");
-extern const uint8_t _key_end[]   asm("_binary_key_txt_end");
-
-extern const uint8_t _uuid_start[]   asm("_binary_uuid_txt_start");
-extern const uint8_t _uuid_end[]   asm("_binary_uuid_txt_end");
-
 /***** Local Data *****/
 static struct hatch_configuration _config;
 
@@ -188,10 +176,6 @@ static void PrintStoredMeasurements(void)
 
 uint32_t task_measure(TaskContext_t *TaskContext)
 {
-  char                     *peep_uuid             = (char *) _uuid_start;
-  char                     *root_ca               = (char *) _root_ca_start;
-  char                     *cert                  = (char *) _cert_start;
-  char                     *key                   = (char *) _key_start;
   bool                      publish_measurements;
   bool                      invalid_time;
   bool                      measurement_stored;
@@ -383,7 +367,7 @@ uint32_t task_measure(TaskContext_t *TaskContext)
 
            /* Attempt to connect shadow to get updated config data.     */
            LOGI("AWS MQTT shadow connect");
-           Result = aws_mqtt_shadow_init(root_ca, cert, key, peep_uuid, 60);
+           Result = aws_mqtt_shadow_init(TaskContext->root_ca, TaskContext->cert, TaskContext->key, TaskContext->peep_uuid, 60);
            if(Result)
            {
               LOGI("AWS MQTT shadow get timeout %d seconds", _AWS_SHADOW_GET_TIMEOUT_SEC);
@@ -423,7 +407,7 @@ uint32_t task_measure(TaskContext_t *TaskContext)
            /* Regardless of status above, now attempt to publish      */
            /* measurements.                                           */
            LOGI("AWS MQTT connect");
-           Result = aws_mqtt_init(root_ca, cert, key, peep_uuid, 5);
+           Result = aws_mqtt_init(TaskContext->root_ca, TaskContext->cert, TaskContext->key, TaskContext->peep_uuid, 5);
            if(Result)
            {
               LOGI("aws_mqtt_init() success.");
@@ -439,7 +423,7 @@ uint32_t task_measure(TaskContext_t *TaskContext)
               measurement_stored = true;
 
               LOGI("publishing measurement results over MQTT");
-              Result = aws_publish_measurements(buffer, _BUFFER_LEN, (char *) _uuid_start, _config.uuid);
+              Result = aws_publish_measurements(buffer, _BUFFER_LEN, TaskContext->peep_uuid, _config.uuid);
               if(Result)
               {
                  LOGI("published measurement results over MQTT");

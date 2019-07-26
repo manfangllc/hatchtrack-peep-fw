@@ -4,6 +4,7 @@ COMPONENT_PRIV_INCLUDEDIRS := \
 
 COMPONENT_OBJS := \
   memory.o \
+  cert.o \
   memory_measurement_db.o \
   state.o
 

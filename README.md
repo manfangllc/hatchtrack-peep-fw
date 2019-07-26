@@ -55,6 +55,12 @@ python -m pip install --user -r $IDF_PATH/requirements.txt
 ```
 
 #### Embedded Documents
+
+Embedded documents are no longer used to store the per peep specific
+certificates needed to connect to the AES cloud.   See the next section for
+the replacement mechanism.
+
+### Generating Certificate NVS Image
 There are files not tracked by Git that are required to build firmware. These
 files are unique to each Peep being built and therefore do not make sense to
 track in this repository. Currently, these files are obtained from Amazon and
@@ -62,7 +68,8 @@ by running command line arguments on your development machine. In the future,
 this process will be automated, but until then, your best approach is to
 contact the one of the developers of this project.
 
-In summary, the following files need to be created to allow the code to build.
+The following certificate files must be present, and in the location listed,
+in order to generate an NVS image that can be flashed:
 
 `./main/uuid.txt` : This is a 128 bit UUID assigned to the Peep being built in
 the form of `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`, where each `x` is an
@@ -88,6 +95,26 @@ navigating to an already created device. This file is unique for each Peep;
 undefined behavior will occur if certificates are shared for multiple Peeps.
 When obtained from Amazon, the file will normally be named in the form of
 `*-private.pem.key`.
+
+If these files are present a python script is provided by the ESP-IDF that
+will generate an NVS image that can be programmed to the device seperately
+from the application image:
+
+   python ./esp-idf/components/nvs_flash/nvs_partition_generator/nvs_partition_gen.py --input certificates.csv --output ./build/nvs_certs.bin --size 16384
+
+This will create a file, if successful, called "nvs_certs.bin" in the build
+directory that can then be programmed to a specific flash partition.
+
+To flash this built certificate image to the correct partition run the
+following command:
+
+   python ./esp-idf/components/esptool_py/esptool/esptool.py --port <ESPPORT> --chip esp32 write_flash 0x10000 build/nvs_certs.bin
+
+The above two python commands to generate the nvs binary file and to flash it
+have been automated via a makefile rule.   Two perform both operations perform
+the following in the project root:
+
+   make cert_flash
 
 ### Compilation
 

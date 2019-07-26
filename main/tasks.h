@@ -11,10 +11,14 @@
 
 typedef struct
 {
-   EventGroupHandle_t EventGroup;
-   peep_state_t       CurrentState;
-   char               SSID[WIFI_SSID_LEN_MAX];
-   char               Password[WIFI_PASSWORD_LEN_MAX];
+   EventGroupHandle_t  EventGroup;
+   peep_state_t        CurrentState;
+   char                SSID[WIFI_SSID_LEN_MAX];
+   char                Password[WIFI_PASSWORD_LEN_MAX];
+   char               *peep_uuid;
+   char               *root_ca;
+   char               *cert;
+   char               *key;
 } TaskContext_t;
 
 extern uint32_t task_ble_config_wifi_credentials(TaskContext_t *TaskContext);
